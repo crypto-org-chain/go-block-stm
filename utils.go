@@ -14,3 +14,11 @@ func StoreMin(a *atomic.Uint64, b uint64) {
 		}
 	}
 }
+
+func DecreaseAtomic(a *atomic.Uint64) {
+	a.Add(^uint64(0))
+}
+
+func IncreaseAtomic(a *atomic.Uint64) {
+	a.Add(1)
+}

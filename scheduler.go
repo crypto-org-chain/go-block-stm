@@ -99,6 +99,7 @@ func (s *Scheduler) TryIncarnate(idx TxnIndex) (Incarnation, bool) {
 			return incarnation, true
 		}
 	}
+	DecreaseAtomic(&s.num_active_tasks)
 	return 0, false
 }
 
@@ -110,11 +111,11 @@ func (s *Scheduler) NextVersionToExecute() TxnVersion {
 		s.CheckDone()
 		return TxnVersion{-1, 0}
 	}
+	IncreaseAtomic(&s.num_active_tasks)
 	incarnation, ok := s.TryIncarnate(TxnIndex(s.execution_idx.Add(1)))
 	if !ok {
 		return TxnVersion{-1, 0}
 	}
-	s.num_active_tasks.Add(1)
 	return TxnVersion{TxnIndex(execution_idx), incarnation}
 }
 
@@ -125,7 +126,7 @@ func (s *Scheduler) NextVersionToValidate() TxnVersion {
 		s.CheckDone()
 		return TxnVersion{-1, 0}
 	}
-	s.num_active_tasks.Add(1)
+	IncreaseAtomic(&s.num_active_tasks)
 	idx_to_validate := s.validation_idx.Add(1)
 	if idx_to_validate < uint64(s.block_size) {
 		status, incarnation := s.txn_status[idx_to_validate].Get()
@@ -134,7 +135,7 @@ func (s *Scheduler) NextVersionToValidate() TxnVersion {
 		}
 	}
 
-	s.num_active_tasks.Add(^uint64(0))
+	DecreaseAtomic(&s.num_active_tasks)
 	return TxnVersion{-1, 0}
 }
 
@@ -150,6 +151,7 @@ func (s *Scheduler) NextTask() (TxnVersion, TaskKind) {
 	}
 }
 
+// AddDependency adds a dependency between two transactions, returns false if tx is already executed
 func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	entry := &s.txn_dependency[blocking_txn]
 	entry.mutex.Lock()
@@ -160,7 +162,7 @@ func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	}
 
 	entry.dependents = append(entry.dependents, txn)
-	s.num_active_tasks.Add(^uint64(0))
+	DecreaseAtomic(&s.num_active_tasks)
 	return true
 }
 
@@ -199,7 +201,7 @@ func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnV
 		}
 		s.DecreaseValidationIdx(version.Index)
 	}
-	s.num_active_tasks.Add(^uint64(0))
+	DecreaseAtomic(&s.num_active_tasks)
 	return TxnVersion{-1, 0}, 0
 }
 
@@ -216,9 +218,11 @@ func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, Ta
 			if ok {
 				return TxnVersion{txn, incarnation}, TaskKindExecution
 			}
+			// TryIncarnate already decresed num_active_tasks, so no need to decrease it again
+			return TxnVersion{-1, 0}, 0
 		}
 	}
 
-	s.num_active_tasks.Add(^uint64(0))
+	DecreaseAtomic(&s.num_active_tasks)
 	return TxnVersion{-1, 0}, 0
 }
