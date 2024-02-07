@@ -1,12 +1,18 @@
 package block_stm
 
+import "errors"
+
 type Executor struct {
 	scheduler *Scheduler
+	vm        *VM
+	mvMemory  *MVMemory
 }
 
-func NewExecutor(scheduler *Scheduler) *Executor {
+func NewExecutor(block_size int, vm *VM) *Executor {
 	return &Executor{
-		scheduler: scheduler,
+		scheduler: NewScheduler(block_size),
+		vm:        vm,
+		mvMemory:  NewMVMemory(block_size),
 	}
 }
 
@@ -28,11 +34,25 @@ func (e *Executor) Run() {
 }
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
-	// TODO
-	return TxnVersion{-1, 0}, TaskKindValidation
+	result, err := e.vm.Execute(version.Index)
+	var readErr ErrReadError
+	if errors.As(err, &readErr) {
+		if !e.scheduler.AddDependency(version.Index, readErr.BlockingTxn) {
+			// dependency resolved in the meantime, re-execute
+			return e.TryExecute(version)
+		}
+		return TxnVersion{-1, 0}, 0
+	}
+
+	wroteNewLocation := e.mvMemory.Record(version, result.ReadSet, result.WriteSet)
+	return e.scheduler.FinishExecution(version, wroteNewLocation)
 }
 
 func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
-	// TODO
-	return TxnVersion{-1, 0}, TaskKindValidation
+	valid := e.mvMemory.ValidateReadSet(version.Index)
+	aborted := !valid && e.scheduler.TryValidationAbort(version)
+	if aborted {
+		e.mvMemory.ConvertWritesToEstimates(version.Index)
+	}
+	return e.scheduler.FinishValidation(version.Index, !aborted)
 }
