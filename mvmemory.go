@@ -2,43 +2,11 @@ package block_stm
 
 import (
 	"sync/atomic"
-
-	"github.com/tidwall/btree"
 )
-
-type (
-	Key   string
-	Value []byte
-)
-
-type dataItem struct {
-	Key      Key
-	Version  TxnVersion
-	Value    []byte
-	Estimate bool
-}
-
-func dataItemLess(a, b dataItem) bool {
-	return a.Key < b.Key || a.Version.Index < b.Version.Index
-}
-
-type WriteSet = MemDB
-
-func NewWriteSet() WriteSet {
-	return *NewMemDBNonConcurrent()
-}
-
-type ReadDescriptor struct {
-	key Key
-	// invalid version means the key is read from storage
-	version TxnVersion
-}
-
-type ReadSet []ReadDescriptor
 
 // MVMemory implements `Algorithm 2 The MVMemory module`
 type MVMemory struct {
-	data *btree.BTreeG[dataItem]
+	data MVData
 	// keys are sorted
 	lastWrittenLocations []atomic.Pointer[[]Key]
 	lastReadSet          []atomic.Pointer[ReadSet]
@@ -46,7 +14,7 @@ type MVMemory struct {
 
 func NewMVMemory(block_size int) *MVMemory {
 	return &MVMemory{
-		data:                 btree.NewBTreeG[dataItem](dataItemLess),
+		data:                 *NewMVData(),
 		lastWrittenLocations: make([]atomic.Pointer[[]Key], block_size),
 		lastReadSet:          make([]atomic.Pointer[ReadSet], block_size),
 	}
@@ -57,7 +25,7 @@ func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSe
 
 	// apply_write_set
 	writeSet.Scan(func(key Key, value Value) bool {
-		mv.write(key, value, version)
+		mv.data.Write(key, value, version)
 		newLocations = append(newLocations, key)
 		return true
 	})
@@ -65,10 +33,6 @@ func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSe
 	wroteNewLocation := mv.RCUUpdateWrittenLocations(version.Index, newLocations)
 	mv.lastReadSet[version.Index].Store(&readSet)
 	return wroteNewLocation
-}
-
-func (mv *MVMemory) write(key Key, value Value, version TxnVersion) {
-	mv.data.Set(dataItem{Key: key, Version: version, Value: value})
 }
 
 // newLocations are sorted
@@ -80,7 +44,7 @@ func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) 
 		if is_new {
 			wroteNewLocation = true
 		} else {
-			mv.data.Delete(dataItem{Key: key, Version: TxnVersion{Index: txn}})
+			mv.data.Delete(key, txn)
 		}
 		return true
 	})
@@ -91,24 +55,12 @@ func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) 
 
 func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
 	for _, key := range *mv.lastWrittenLocations[txn].Load() {
-		mv.data.Set(dataItem{Key: key, Version: TxnVersion{Index: txn}, Estimate: true})
+		mv.data.WriteEstimate(key, txn)
 	}
 }
 
 func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
-	iter := mv.data.Iter()
-	iter.Seek(dataItem{Key: key, Version: TxnVersion{Index: txn}})
-	iter.Prev()
-	item := iter.Item()
-	iter.Release()
-
-	if item.Key != key {
-		return nil, TxnVersion{}, ErrNotFound
-	}
-	if item.Estimate {
-		return nil, TxnVersion{}, ErrReadError{BlockingTxn: item.Version.Index}
-	}
-	return item.Value, item.Version, nil
+	return mv.data.Read(key, txn)
 }
 
 func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {

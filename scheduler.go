@@ -5,26 +5,12 @@ import (
 	"sync/atomic"
 )
 
-type (
-	TaskKind int
-	TxnIndex int
-)
+type TaskKind int
 
 const (
 	TaskKindExecution TaskKind = iota
 	TaskKindValidation
 )
-
-var InvalidTxnVersion = TxnVersion{-1, 0}
-
-type TxnVersion struct {
-	Index       TxnIndex
-	Incarnation Incarnation
-}
-
-func (v TxnVersion) Valid() bool {
-	return v.Index >= 0
-}
 
 type TxDependency struct {
 	mutex      sync.Mutex

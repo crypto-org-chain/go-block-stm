@@ -2,10 +2,7 @@ package block_stm
 
 import "sync"
 
-type (
-	Status      uint
-	Incarnation uint
-)
+type Status uint
 
 const (
 	StatusReadyToExecute Status = iota
