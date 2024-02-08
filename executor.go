@@ -18,9 +18,9 @@ func NewExecutor(block_size int, vm *VM) *Executor {
 
 func (e *Executor) Run() {
 	var kind TaskKind
-	version := TxnVersion{-1, 0}
+	version := InvalidTxnVersion
 	for !e.scheduler.Done() {
-		if !version.IsValid() {
+		if !version.Valid() {
 			version, kind = e.scheduler.NextTask()
 			continue
 		}
@@ -41,7 +41,7 @@ func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
 			// dependency resolved in the meantime, re-execute
 			return e.TryExecute(version)
 		}
-		return TxnVersion{-1, 0}, 0
+		return InvalidTxnVersion, 0
 	}
 
 	wroteNewLocation := e.mvMemory.Record(version, result.ReadSet, result.WriteSet)

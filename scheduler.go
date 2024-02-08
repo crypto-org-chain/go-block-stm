@@ -15,12 +15,14 @@ const (
 	TaskKindValidation
 )
 
+var InvalidTxnVersion = TxnVersion{-1, 0}
+
 type TxnVersion struct {
 	Index       TxnIndex
 	Incarnation Incarnation
 }
 
-func (v TxnVersion) IsValid() bool {
+func (v TxnVersion) Valid() bool {
 	return v.Index >= 0
 }
 
@@ -109,12 +111,12 @@ func (s *Scheduler) NextVersionToExecute() TxnVersion {
 	execution_idx := s.execution_idx.Load()
 	if execution_idx >= uint64(s.block_size) {
 		s.CheckDone()
-		return TxnVersion{-1, 0}
+		return InvalidTxnVersion
 	}
 	IncreaseAtomic(&s.num_active_tasks)
 	incarnation, ok := s.TryIncarnate(TxnIndex(s.execution_idx.Add(1)))
 	if !ok {
-		return TxnVersion{-1, 0}
+		return InvalidTxnVersion
 	}
 	return TxnVersion{TxnIndex(execution_idx), incarnation}
 }
@@ -124,7 +126,7 @@ func (s *Scheduler) NextVersionToExecute() TxnVersion {
 func (s *Scheduler) NextVersionToValidate() TxnVersion {
 	if s.validation_idx.Load() >= uint64(s.block_size) {
 		s.CheckDone()
-		return TxnVersion{-1, 0}
+		return InvalidTxnVersion
 	}
 	IncreaseAtomic(&s.num_active_tasks)
 	idx_to_validate := s.validation_idx.Add(1)
@@ -136,7 +138,7 @@ func (s *Scheduler) NextVersionToValidate() TxnVersion {
 	}
 
 	DecreaseAtomic(&s.num_active_tasks)
-	return TxnVersion{-1, 0}
+	return InvalidTxnVersion
 }
 
 // NextTask returns the transaction index and task kind for the next task to execute or validate,
@@ -202,7 +204,7 @@ func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnV
 		s.DecreaseValidationIdx(version.Index)
 	}
 	DecreaseAtomic(&s.num_active_tasks)
-	return TxnVersion{-1, 0}, 0
+	return InvalidTxnVersion, 0
 }
 
 func (s *Scheduler) TryValidationAbort(version TxnVersion) bool {
@@ -219,10 +221,10 @@ func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, Ta
 				return TxnVersion{txn, incarnation}, TaskKindExecution
 			}
 			// TryIncarnate already decresed num_active_tasks, so no need to decrease it again
-			return TxnVersion{-1, 0}, 0
+			return InvalidTxnVersion, 0
 		}
 	}
 
 	DecreaseAtomic(&s.num_active_tasks)
-	return TxnVersion{-1, 0}, 0
+	return InvalidTxnVersion, 0
 }

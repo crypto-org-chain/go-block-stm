@@ -11,27 +11,22 @@ type (
 	Value []byte
 )
 
-type writeSetItem struct {
-	key   Key
-	value Value
-}
-
-func writeSetItemLess(a, b writeSetItem) bool {
-	return a.key < b.key
-}
-
-type btreeItem struct {
+type dataItem struct {
 	Key      Key
 	Version  TxnVersion
 	Value    []byte
 	Estimate bool
 }
 
-func btreeItemLesser(a, b btreeItem) bool {
+func dataItemLess(a, b dataItem) bool {
 	return a.Key < b.Key || a.Version.Index < b.Version.Index
 }
 
-type WriteSet = *btree.BTreeG[writeSetItem]
+type WriteSet = MemDB
+
+func NewWriteSet() WriteSet {
+	return *NewMemDBNonConcurrent()
+}
 
 type ReadDescriptor struct {
 	key Key
@@ -39,29 +34,31 @@ type ReadDescriptor struct {
 	version TxnVersion
 }
 
+type ReadSet []ReadDescriptor
+
 // MVMemory implements `Algorithm 2 The MVMemory module`
 type MVMemory struct {
-	data *btree.BTreeG[btreeItem]
+	data *btree.BTreeG[dataItem]
 	// keys are sorted
 	lastWrittenLocations []atomic.Pointer[[]Key]
-	lastReadSet          []atomic.Pointer[[]ReadDescriptor]
+	lastReadSet          []atomic.Pointer[ReadSet]
 }
 
 func NewMVMemory(block_size int) *MVMemory {
 	return &MVMemory{
-		data:                 btree.NewBTreeG[btreeItem](btreeItemLesser),
+		data:                 btree.NewBTreeG[dataItem](dataItemLess),
 		lastWrittenLocations: make([]atomic.Pointer[[]Key], block_size),
-		lastReadSet:          make([]atomic.Pointer[[]ReadDescriptor], block_size),
+		lastReadSet:          make([]atomic.Pointer[ReadSet], block_size),
 	}
 }
 
-func (mv *MVMemory) Record(version TxnVersion, readSet []ReadDescriptor, writeSet WriteSet) bool {
+func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSet) bool {
 	newLocations := make([]Key, 0, writeSet.Len())
 
 	// apply_write_set
-	writeSet.Scan(func(item writeSetItem) bool {
-		mv.write(item.key, item.value, version)
-		newLocations = append(newLocations, item.key)
+	writeSet.Scan(func(key Key, value Value) bool {
+		mv.write(key, value, version)
+		newLocations = append(newLocations, key)
 		return true
 	})
 
@@ -71,7 +68,7 @@ func (mv *MVMemory) Record(version TxnVersion, readSet []ReadDescriptor, writeSe
 }
 
 func (mv *MVMemory) write(key Key, value Value, version TxnVersion) {
-	mv.data.Set(btreeItem{Key: key, Version: version, Value: value})
+	mv.data.Set(dataItem{Key: key, Version: version, Value: value})
 }
 
 // newLocations are sorted
@@ -83,7 +80,7 @@ func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) 
 		if is_new {
 			wroteNewLocation = true
 		} else {
-			mv.data.Delete(btreeItem{Key: key, Version: TxnVersion{Index: txn}})
+			mv.data.Delete(dataItem{Key: key, Version: TxnVersion{Index: txn}})
 		}
 		return true
 	})
@@ -94,13 +91,13 @@ func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) 
 
 func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
 	for _, key := range *mv.lastWrittenLocations[txn].Load() {
-		mv.data.Set(btreeItem{Key: key, Version: TxnVersion{Index: txn}, Estimate: true})
+		mv.data.Set(dataItem{Key: key, Version: TxnVersion{Index: txn}, Estimate: true})
 	}
 }
 
 func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 	iter := mv.data.Iter()
-	iter.Seek(btreeItem{Key: key, Version: TxnVersion{Index: txn}})
+	iter.Seek(dataItem{Key: key, Version: TxnVersion{Index: txn}})
 	iter.Prev()
 	item := iter.Item()
 	iter.Release()
@@ -120,7 +117,7 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 		_, version, err := mv.Read(desc.key, txn)
 		switch err {
 		case ErrNotFound:
-			if version.IsValid() {
+			if version.Valid() {
 				// previously read entry from data, now NOT_FOUND
 				return false
 			}

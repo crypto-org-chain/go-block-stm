@@ -1,28 +1,37 @@
 package block_stm
 
 type VMResult struct {
-	ReadSet  []ReadDescriptor
+	ReadSet  ReadSet
 	WriteSet WriteSet
 }
 
 type KVStore interface {
-	Get([]byte) ([]byte, error)
-	Set([]byte, []byte) error
+	Get(Key) (Value, error)
+	Set(Key, Value) error
 }
 
-type Tx func(KVStore) (*VMResult, error)
+type Tx func(KVStore) error
 
 type VM struct {
-	txs []Tx
+	storage  KVStore
+	mvMemory *MVMemory
+	txs      []Tx
 }
 
-func NewVM(txs []Tx) *VM {
+func NewVM(storage KVStore, mvMemory *MVMemory, txs []Tx) *VM {
 	return &VM{
-		txs: txs,
+		storage:  storage,
+		mvMemory: mvMemory,
+		txs:      txs,
 	}
 }
 
 func (vm *VM) Execute(txn TxnIndex) (*VMResult, error) {
-	// TODO vmmemory
-	return vm.txs[txn](nil)
+	view := NewMVMemoryView(vm.storage, vm.mvMemory, txn)
+	err := vm.txs[txn](view)
+	if err != nil {
+		return nil, err
+	}
+
+	return view.VMResult(), nil
 }
