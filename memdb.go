@@ -1,6 +1,10 @@
 package block_stm
 
-import "github.com/tidwall/btree"
+import (
+	"bytes"
+
+	"github.com/tidwall/btree"
+)
 
 type memdbItem struct {
 	key   Key
@@ -8,7 +12,7 @@ type memdbItem struct {
 }
 
 func memdbItemLess(a, b memdbItem) bool {
-	return a.key < b.key
+	return bytes.Compare(a.key, b.key) < 0
 }
 
 type MemDB struct {

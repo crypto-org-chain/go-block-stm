@@ -1,7 +1,7 @@
 package block_stm
 
 import (
-	"cmp"
+	"bytes"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -39,20 +39,21 @@ func IncreaseAtomic(a *atomic.Uint64) {
 }
 
 // callback arguments: (value, is_new)
-func DiffOrderedList[T cmp.Ordered](old, new []T, callback func(T, bool) bool) {
+func DiffOrderedList(old, new []Key, callback func(Key, bool) bool) {
 	i, j := 0, 0
 	for i < len(old) && j < len(new) {
-		if old[i] < new[j] {
+		switch bytes.Compare(old[i], new[j]) {
+		case -1:
 			if !callback(old[i], false) {
 				return
 			}
 			i++
-		} else if old[i] > new[j] {
+		case 1:
 			if !callback(new[j], true) {
 				return
 			}
 			j++
-		} else {
+		default:
 			i++
 			j++
 		}

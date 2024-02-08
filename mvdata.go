@@ -44,7 +44,7 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 
 	item := iter.Item()
 
-	if item.Key != key {
+	if !bytes.Equal(item.Key, key) {
 		return nil, TxnVersion{}, ErrNotFound
 	}
 	if item.Estimate {
@@ -58,7 +58,7 @@ func (d *MVData) Snapshot() []KVPair {
 
 	var lastKey Key
 	d.inner.Scan(func(item dataItem) bool {
-		if item.Key != lastKey {
+		if !bytes.Equal(item.Key, lastKey) {
 			snapshot = append(snapshot, KVPair{Key: item.Key, Value: item.Value})
 			lastKey = item.Key
 		}
@@ -82,7 +82,7 @@ type dataItem struct {
 }
 
 func dataItemLess(a, b dataItem) bool {
-	switch bytes.Compare([]byte(a.Key), []byte(b.Key)) {
+	switch bytes.Compare(a.Key, b.Key) {
 	case -1:
 		return true
 	case 1:

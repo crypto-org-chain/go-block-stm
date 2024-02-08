@@ -17,7 +17,7 @@ func (v TxnVersion) Valid() bool {
 }
 
 type (
-	Key   string
+	Key   []byte
 	Value []byte
 )
 
