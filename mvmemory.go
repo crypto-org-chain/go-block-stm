@@ -67,7 +67,8 @@ func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 }
 
 func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
-	readSet := mv.readLastReadSet(txn)
+	// Invariant: at least one `Record` call has been made for `txn`
+	readSet := *mv.lastReadSet[txn].Load()
 	for _, desc := range readSet {
 		_, version, err := mv.Read(desc.key, txn)
 		switch err {
@@ -92,14 +93,6 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 
 func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) []Key {
 	p := mv.lastWrittenLocations[txn].Load()
-	if p != nil {
-		return *p
-	}
-	return nil
-}
-
-func (mv *MVMemory) readLastReadSet(txn TxnIndex) ReadSet {
-	p := mv.lastReadSet[txn].Load()
 	if p != nil {
 		return *p
 	}
