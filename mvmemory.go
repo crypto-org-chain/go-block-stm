@@ -29,14 +29,14 @@ func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSe
 		return true
 	})
 
-	wroteNewLocation := mv.RCUUpdateWrittenLocations(version.Index, newLocations)
+	wroteNewLocation := mv.rcuUpdateWrittenLocations(version.Index, newLocations)
 	mv.lastReadSet[version.Index].Store(&readSet)
 	return wroteNewLocation
 }
 
 // newLocations are sorted
-func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) bool {
-	prevLocations := *mv.lastWrittenLocations[txn].Load()
+func (mv *MVMemory) rcuUpdateWrittenLocations(txn TxnIndex, newLocations []Key) bool {
+	prevLocations := mv.readLastWrittenLocations(txn)
 
 	var (
 		hint             PathHint
@@ -57,7 +57,7 @@ func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) 
 
 func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
 	var hint PathHint
-	for _, key := range *mv.lastWrittenLocations[txn].Load() {
+	for _, key := range mv.readLastWrittenLocations(txn) {
 		mv.data.WriteEstimate(key, txn, &hint)
 	}
 }
@@ -67,12 +67,12 @@ func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 }
 
 func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
-	readSet := *mv.lastReadSet[txn].Load()
+	readSet := mv.readLastReadSet(txn)
 	for _, desc := range readSet {
 		_, version, err := mv.Read(desc.key, txn)
 		switch err {
 		case ErrNotFound:
-			if version.Valid() {
+			if desc.version.Valid() {
 				// previously read entry from data, now NOT_FOUND
 				return false
 			}
@@ -88,4 +88,20 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 		}
 	}
 	return true
+}
+
+func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) []Key {
+	p := mv.lastWrittenLocations[txn].Load()
+	if p != nil {
+		return *p
+	}
+	return nil
+}
+
+func (mv *MVMemory) readLastReadSet(txn TxnIndex) ReadSet {
+	p := mv.lastReadSet[txn].Load()
+	if p != nil {
+		return *p
+	}
+	return nil
 }
