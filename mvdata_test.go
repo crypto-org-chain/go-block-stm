@@ -10,9 +10,9 @@ import (
 
 func TestEmptyMVData(t *testing.T) {
 	data := NewMVData()
-	_, _, err := data.Read([]byte("a"), 1)
-	require.Error(t, err)
-	require.Equal(t, ErrNotFound, err)
+	value, _, err := data.Read([]byte("a"), 1)
+	require.NoError(t, err)
+	require.Nil(t, value)
 }
 
 func TestMVData(t *testing.T) {
@@ -25,9 +25,9 @@ func TestMVData(t *testing.T) {
 	data.Write([]byte("b"), []byte("2"), TxnVersion{Index: 2, Incarnation: 1}, nil)
 
 	// read closest version
-	_, _, err := data.Read([]byte("a"), 1)
-	require.Error(t, err)
-	require.Equal(t, ErrNotFound, err)
+	value, _, err := data.Read([]byte("a"), 1)
+	require.NoError(t, err)
+	require.Nil(t, value)
 
 	// read closest version
 	value, version, err := data.Read([]byte("a"), 4)
@@ -68,9 +68,9 @@ func TestMVData(t *testing.T) {
 	require.Equal(t, TxnVersion{Index: 2, Incarnation: 1}, version)
 
 	data.Delete([]byte("b"), 2, nil)
-	_, _, err = data.Read([]byte("b"), 4)
-	require.Error(t, err)
-	require.Equal(t, ErrNotFound, err)
+	value, _, err = data.Read([]byte("b"), 4)
+	require.NoError(t, err)
+	require.Nil(t, value)
 }
 
 func TestReadErrConversion(t *testing.T) {

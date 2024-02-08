@@ -70,22 +70,22 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 	// Invariant: at least one `Record` call has been made for `txn`
 	readSet := *mv.lastReadSet[txn].Load()
 	for _, desc := range readSet {
-		_, version, err := mv.Read(desc.key, txn)
-		switch err {
-		case ErrNotFound:
+		value, version, err := mv.Read(desc.key, txn)
+		if err != nil {
+			// must be ErrReadError
+			// previously read entry from data, now ESTIMATE
+			return false
+		}
+		if value == nil {
 			if desc.version.Valid() {
 				// previously read entry from data, now NOT_FOUND
 				return false
 			}
-		case nil:
+		} else {
 			if version != desc.version {
 				// read some entry, but not the same as before
 				return false
 			}
-		default:
-			// must be ErrReadError
-			// previously read entry from data, now ESTIMATE
-			return false
 		}
 	}
 	return true

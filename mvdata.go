@@ -35,18 +35,18 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 
 	if iter.Seek(dataItem{Key: key, Index: txn}) {
 		if !iter.Prev() {
-			return nil, TxnVersion{}, ErrNotFound
+			return nil, TxnVersion{}, nil
 		}
 	} else {
 		if !iter.Last() {
-			return nil, TxnVersion{}, ErrNotFound
+			return nil, TxnVersion{}, nil
 		}
 	}
 
 	item := iter.Item()
 
 	if !bytes.Equal(item.Key, key) {
-		return nil, TxnVersion{}, ErrNotFound
+		return nil, TxnVersion{}, nil
 	}
 	if item.Estimate {
 		return nil, TxnVersion{}, ErrReadError{BlockingTxn: item.Index}

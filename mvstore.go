@@ -28,19 +28,19 @@ func (s *MVMemoryView) Get(key Key) (Value, error) {
 	}
 
 	value, version, err := s.mvMemory.Read(key, s.txn)
-	if err == ErrNotFound {
+	if err != nil {
+		// return `(READ_ERROR, blocking_txn_id)` from the VM.execute
+		return nil, err
+	}
+
+	if value == nil {
 		// record version ⊥ when reading from storage
 		s.readSet = append(s.readSet, ReadDescriptor{key, InvalidTxnVersion})
 		return s.storage.Get(key)
 	}
 
-	if err == nil {
-		s.readSet = append(s.readSet, ReadDescriptor{key, version})
-		return value, nil
-	}
-
-	// return `(READ_ERROR, blocking_txn_id)` from the VM.execute
-	return nil, err
+	s.readSet = append(s.readSet, ReadDescriptor{key, version})
+	return value, nil
 }
 
 func (s *MVMemoryView) Set(key Key, value Value) error {

@@ -2,12 +2,9 @@ package block_stm
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"sync/atomic"
 )
-
-var ErrNotFound = errors.New("not found")
 
 type ErrReadError struct {
 	BlockingTxn TxnIndex
