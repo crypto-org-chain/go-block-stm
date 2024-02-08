@@ -2,6 +2,7 @@ package block_stm
 
 import (
 	"bytes"
+	"slices"
 
 	"github.com/tidwall/btree"
 )
@@ -57,14 +58,15 @@ func (d *MVData) Snapshot() []KVPair {
 	var snapshot []KVPair
 
 	var lastKey Key
-	d.inner.Scan(func(item dataItem) bool {
-		if !bytes.Equal(item.Key, lastKey) {
+	d.inner.Reverse(func(item dataItem) bool {
+		if !item.Estimate && !bytes.Equal(item.Key, lastKey) {
 			snapshot = append(snapshot, KVPair{Key: item.Key, Value: item.Value})
 			lastKey = item.Key
 		}
 		return true
 	})
 
+	slices.Reverse(snapshot)
 	return snapshot
 }
 
