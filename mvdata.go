@@ -1,6 +1,8 @@
 package block_stm
 
 import (
+	"bytes"
+
 	"github.com/tidwall/btree"
 )
 
@@ -27,6 +29,10 @@ func (d *MVData) Delete(key Key, txn TxnIndex, hint *PathHint) {
 }
 
 func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
+	if d.inner.Len() == 0 {
+		return nil, TxnVersion{}, ErrNotFound
+	}
+
 	iter := d.inner.Iter()
 	defer iter.Release()
 
@@ -76,7 +82,14 @@ type dataItem struct {
 }
 
 func dataItemLess(a, b dataItem) bool {
-	return a.Key < b.Key || a.Index < b.Index
+	switch bytes.Compare([]byte(a.Key), []byte(b.Key)) {
+	case -1:
+		return true
+	case 1:
+		return false
+	default:
+		return a.Index < b.Index
+	}
 }
 
 func (item dataItem) Version() TxnVersion {
