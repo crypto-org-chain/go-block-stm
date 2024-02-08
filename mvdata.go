@@ -47,6 +47,26 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 	return item.Value, item.Version(), nil
 }
 
+func (d *MVData) Snapshot() []KVPair {
+	var snapshot []KVPair
+
+	var lastKey Key
+	d.inner.Scan(func(item dataItem) bool {
+		if item.Key != lastKey {
+			snapshot = append(snapshot, KVPair{Key: item.Key, Value: item.Value})
+			lastKey = item.Key
+		}
+		return true
+	})
+
+	return snapshot
+}
+
+type KVPair struct {
+	Key   Key
+	Value Value
+}
+
 type dataItem struct {
 	Key         Key
 	Index       TxnIndex
