@@ -1,8 +1,6 @@
 package block_stm
 
-import (
-	"sync/atomic"
-)
+import "sync/atomic"
 
 // MVMemory implements `Algorithm 2 The MVMemory module`
 type MVMemory struct {
@@ -24,8 +22,9 @@ func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSe
 	newLocations := make([]Key, 0, writeSet.Len())
 
 	// apply_write_set
+	var hint PathHint
 	writeSet.Scan(func(key Key, value Value) bool {
-		mv.data.Write(key, value, version)
+		mv.data.Write(key, value, version, &hint)
 		newLocations = append(newLocations, key)
 		return true
 	})
@@ -39,12 +38,15 @@ func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSe
 func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) bool {
 	prevLocations := *mv.lastWrittenLocations[txn].Load()
 
-	var wroteNewLocation bool
+	var (
+		hint             PathHint
+		wroteNewLocation bool
+	)
 	DiffOrderedList(prevLocations, newLocations, func(key Key, is_new bool) bool {
 		if is_new {
 			wroteNewLocation = true
 		} else {
-			mv.data.Delete(key, txn)
+			mv.data.Delete(key, txn, &hint)
 		}
 		return true
 	})
@@ -54,8 +56,9 @@ func (mv *MVMemory) RCUUpdateWrittenLocations(txn TxnIndex, newLocations []Key) 
 }
 
 func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
+	var hint PathHint
 	for _, key := range *mv.lastWrittenLocations[txn].Load() {
-		mv.data.WriteEstimate(key, txn)
+		mv.data.WriteEstimate(key, txn, &hint)
 	}
 }
 
