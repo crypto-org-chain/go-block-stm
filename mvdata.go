@@ -29,15 +29,15 @@ func (d *MVData) Delete(key Key, txn TxnIndex, hint *PathHint) {
 }
 
 func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
-	if d.inner.Len() == 0 {
-		return nil, TxnVersion{}, ErrNotFound
-	}
-
 	iter := d.inner.Iter()
 	defer iter.Release()
 
 	if iter.Seek(dataItem{Key: key, Index: txn}) {
 		if !iter.Prev() {
+			return nil, TxnVersion{}, ErrNotFound
+		}
+	} else {
+		if !iter.Last() {
 			return nil, TxnVersion{}, ErrNotFound
 		}
 	}
