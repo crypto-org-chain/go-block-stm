@@ -98,3 +98,7 @@ func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) []Key {
 	}
 	return nil
 }
+
+func (mv *MVMemory) Snapshot() []KVPair {
+	return mv.data.Snapshot()
+}

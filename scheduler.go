@@ -80,31 +80,27 @@ func (s *Scheduler) CheckDone() {
 	}
 }
 
-func (s *Scheduler) TryIncarnate(idx TxnIndex) (Incarnation, bool) {
+func (s *Scheduler) TryIncarnate(idx TxnIndex) TxnVersion {
 	if int(idx) < s.block_size {
 		incarnation, ok := s.txn_status[idx].SetExecuting()
 		if ok {
-			return incarnation, true
+			return TxnVersion{idx, incarnation}
 		}
 	}
 	DecreaseAtomic(&s.num_active_tasks)
-	return 0, false
+	return InvalidTxnVersion
 }
 
 // NextVersionToExecute get the next transaction index to execute,
 // returns invalid version if no task is available
 func (s *Scheduler) NextVersionToExecute() TxnVersion {
-	execution_idx := s.execution_idx.Load()
-	if execution_idx >= uint64(s.block_size) {
+	if s.execution_idx.Load() >= uint64(s.block_size) {
 		s.CheckDone()
 		return InvalidTxnVersion
 	}
 	IncreaseAtomic(&s.num_active_tasks)
-	incarnation, ok := s.TryIncarnate(TxnIndex(s.execution_idx.Add(1)))
-	if !ok {
-		return InvalidTxnVersion
-	}
-	return TxnVersion{TxnIndex(execution_idx), incarnation}
+	idx_to_execute := s.execution_idx.Add(1) - 1
+	return s.TryIncarnate(TxnIndex(idx_to_execute))
 }
 
 // NextVersionToValidate get the next transaction index to validate,
@@ -115,7 +111,7 @@ func (s *Scheduler) NextVersionToValidate() TxnVersion {
 		return InvalidTxnVersion
 	}
 	IncreaseAtomic(&s.num_active_tasks)
-	idx_to_validate := s.validation_idx.Add(1)
+	idx_to_validate := s.validation_idx.Add(1) - 1
 	if idx_to_validate < uint64(s.block_size) {
 		status, incarnation := s.txn_status[idx_to_validate].Get()
 		if status == StatusExecuted {
@@ -202,12 +198,7 @@ func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, Ta
 		s.SetReadyStatus(txn)
 		s.DecreaseValidationIdx(txn + 1)
 		if s.execution_idx.Load() > uint64(txn) {
-			incarnation, ok := s.TryIncarnate(txn)
-			if ok {
-				return TxnVersion{txn, incarnation}, TaskKindExecution
-			}
-			// TryIncarnate already decresed num_active_tasks, so no need to decrease it again
-			return InvalidTxnVersion, 0
+			return s.TryIncarnate(txn), TaskKindExecution
 		}
 	}
 

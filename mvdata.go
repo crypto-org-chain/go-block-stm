@@ -2,7 +2,6 @@ package block_stm
 
 import (
 	"bytes"
-	"slices"
 
 	"github.com/tidwall/btree"
 )
@@ -57,16 +56,28 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 func (d *MVData) Snapshot() []KVPair {
 	var snapshot []KVPair
 
-	var lastKey Key
-	d.inner.Reverse(func(item dataItem) bool {
-		if !item.Estimate && !bytes.Equal(item.Key, lastKey) {
-			snapshot = append(snapshot, KVPair{Key: item.Key, Value: item.Value})
-			lastKey = item.Key
+	var lastPair KVPair
+	d.inner.Scan(func(item dataItem) bool {
+		if item.Estimate {
+			return true
 		}
+
+		if lastPair.Key == nil {
+			lastPair = KVPair{Key: item.Key, Value: item.Value}
+			return true
+		}
+
+		if bytes.Equal(item.Key, lastPair.Key) {
+			lastPair.Value = item.Value
+			return true
+		}
+
+		snapshot = append(snapshot, lastPair)
+		lastPair = KVPair{Key: item.Key, Value: item.Value}
 		return true
 	})
 
-	slices.Reverse(snapshot)
+	snapshot = append(snapshot, lastPair)
 	return snapshot
 }
 

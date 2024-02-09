@@ -8,11 +8,15 @@ type Executor struct {
 	mvMemory  *MVMemory
 }
 
-func NewExecutor(block_size int, vm *VM) *Executor {
+func NewExecutor(
+	scheduler *Scheduler,
+	vm *VM,
+	mvMemory *MVMemory,
+) *Executor {
 	return &Executor{
-		scheduler: NewScheduler(block_size),
+		scheduler: scheduler,
 		vm:        vm,
-		mvMemory:  NewMVMemory(block_size),
+		mvMemory:  mvMemory,
 	}
 }
 
@@ -54,5 +58,5 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 	if aborted {
 		e.mvMemory.ConvertWritesToEstimates(version.Index)
 	}
-	return e.scheduler.FinishValidation(version.Index, !aborted)
+	return e.scheduler.FinishValidation(version.Index, aborted)
 }
