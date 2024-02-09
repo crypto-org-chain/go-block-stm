@@ -162,7 +162,7 @@ func (s *Scheduler) SetReadyStatus(txn TxnIndex) {
 }
 
 func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
-	var minIdx TxnIndex = -1
+	var minIdx TxnIndex = TxnIndex(s.block_size)
 	for _, txn := range txns {
 		s.SetReadyStatus(txn)
 		if txn < minIdx {
@@ -170,7 +170,7 @@ func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
 		}
 	}
 
-	if minIdx >= 0 {
+	if minIdx < TxnIndex(s.block_size) {
 		s.DecreaseExecutionIdx(minIdx)
 	}
 }
