@@ -1,7 +1,9 @@
 package block_stm
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -23,7 +25,18 @@ func Tx1(sender string) Tx {
 
 		var bz [8]byte
 		binary.BigEndian.PutUint64(bz[:], nonce+1)
-		return store.Set(nonceKey, bz[:])
+		if err := store.Set(nonceKey, bz[:]); err != nil {
+			return err
+		}
+
+		v, err = store.Get(nonceKey)
+		if err != nil {
+			return err
+		}
+		if binary.BigEndian.Uint64(v) != nonce+1 {
+			return fmt.Errorf("nonce not incremented: %d", binary.BigEndian.Uint64(v))
+		}
+		return nil
 	}
 }
 
@@ -41,23 +54,58 @@ func testBlock(size int, accounts int) []Tx {
 	return blk
 }
 
-func TestSTM(t *testing.T) {
-	blockSize := 100
-	accounts := 10
-	blk := testBlock(blockSize, accounts)
-	storage := NewMemDB()
-	ExecuteBlock(storage, blk, 1)
-
-	var total uint64
-	for i := 0; i < accounts; i++ {
-		nonceKey := []byte("nonce" + accountName(int64(i)))
-		v, err := storage.Get(nonceKey)
-		require.NoError(t, err)
-		var nonce uint64
-		if v != nil {
-			nonce = binary.BigEndian.Uint64(v)
-		}
-		total += nonce
+func determisticBlock() []Tx {
+	return []Tx{
+		Tx1("account0"),
+		Tx1("account1"),
+		Tx1("account1"),
+		Tx1("account1"),
+		Tx1("account3"),
+		Tx1("account1"),
+		Tx1("account4"),
+		Tx1("account5"),
+		Tx1("account6"),
 	}
-	require.Equal(t, uint64(blockSize), total)
+}
+
+func TestSTM(t *testing.T) {
+	testCases := []struct {
+		name      string
+		blk       []Tx
+		executors int
+	}{
+		{
+			name:      "testBlock(100,80),30",
+			blk:       testBlock(100, 80),
+			executors: 30,
+		},
+		{
+			name:      "testBlock(100,3),30",
+			blk:       testBlock(100, 3),
+			executors: 30,
+		},
+		{
+			name:      "determisticBlock(),5",
+			blk:       determisticBlock(),
+			executors: 5,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			storage := NewMemDB()
+			ExecuteBlock(storage, tc.blk, tc.executors)
+
+			// check total nonce increased the same amount as the number of transactions
+			var total uint64
+			storage.Scan(func(k Key, v Value) bool {
+				if !bytes.HasPrefix(k, []byte("nonce")) {
+					return true
+				}
+				total += binary.BigEndian.Uint64(v)
+				return true
+			})
+			require.Equal(t, uint64(len(tc.blk)), total)
+		})
+	}
 }

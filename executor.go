@@ -3,17 +3,20 @@ package block_stm
 import "errors"
 
 type Executor struct {
+	i         int
 	scheduler *Scheduler
 	vm        *VM
 	mvMemory  *MVMemory
 }
 
 func NewExecutor(
+	i int,
 	scheduler *Scheduler,
 	vm *VM,
 	mvMemory *MVMemory,
 ) *Executor {
 	return &Executor{
+		i:         i,
 		scheduler: scheduler,
 		vm:        vm,
 		mvMemory:  mvMemory,

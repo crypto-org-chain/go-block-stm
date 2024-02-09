@@ -141,9 +141,14 @@ func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	if !s.txn_status[txn].SetAborting() {
+	status, _ := s.txn_status[blocking_txn].Get()
+	if status == StatusExecuted {
+		// dependency resolved before locking in Line 148
 		return false
 	}
+
+	// previous status must be EXECUTING
+	s.txn_status[txn].SetStatus(StatusAborting)
 
 	entry.dependents = append(entry.dependents, txn)
 	DecreaseAtomic(&s.num_active_tasks)
@@ -176,7 +181,9 @@ func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
 }
 
 func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnVersion, TaskKind) {
-	s.txn_status[version.Index].SetExecuted()
+	// status must have been EXECUTING
+	s.txn_status[version.Index].SetStatus(StatusExecuted)
+
 	deps := s.txn_dependency[version.Index].Swap(nil)
 	s.ResumeDependencies(deps)
 	if s.validation_idx.Load() > uint64(version.Index) {

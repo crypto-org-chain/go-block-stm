@@ -19,11 +19,11 @@ type StatusEntry struct {
 	status      Status
 }
 
-func (s *StatusEntry) Get() (Status, Incarnation) {
+func (s *StatusEntry) Get() (status Status, incarnation Incarnation) {
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return s.status, s.incarnation
+	status, incarnation = s.status, s.incarnation
+	s.mutex.Unlock()
+	return
 }
 
 func (s *StatusEntry) SetExecuting() (Incarnation, bool) {
@@ -37,26 +37,10 @@ func (s *StatusEntry) SetExecuting() (Incarnation, bool) {
 	return 0, false
 }
 
-// SetAborting is called by Scheduler.AddDependency
-func (s *StatusEntry) SetAborting() bool {
+func (s *StatusEntry) SetStatus(status Status) {
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	if s.status == StatusExecuted {
-		// dependency resolved
-		return false
-	}
-	// previous status must be EXECUTING
-	s.status = StatusAborting
-	return true
-}
-
-func (s *StatusEntry) SetExecuted() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	// status must have been EXECUTING, called by Scheduler.FinishExecution
-	s.status = StatusExecuted
+	s.status = status
+	s.mutex.Unlock()
 }
 
 func (s *StatusEntry) TryValidationAbort(incarnation Incarnation) bool {

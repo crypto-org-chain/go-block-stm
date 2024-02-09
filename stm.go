@@ -12,9 +12,10 @@ func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
 	wg := sync.WaitGroup{}
 	wg.Add(executors)
 	for i := 0; i < executors; i++ {
+		i := i
 		go func() {
 			defer wg.Done()
-			NewExecutor(scheduler, vm, mv).Run()
+			NewExecutor(i, scheduler, vm, mv).Run()
 		}()
 	}
 	wg.Wait()
