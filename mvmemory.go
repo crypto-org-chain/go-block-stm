@@ -62,7 +62,7 @@ func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
 	}
 }
 
-func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
+func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {
 	return mv.data.Read(key, txn)
 }
 
@@ -72,7 +72,6 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 	for _, desc := range readSet {
 		value, version, err := mv.Read(desc.key, txn)
 		if err != nil {
-			// must be ErrReadError
 			// previously read entry from data, now ESTIMATE
 			return false
 		}

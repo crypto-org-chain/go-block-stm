@@ -28,7 +28,7 @@ func (d *MVData) Delete(key Key, txn TxnIndex, hint *PathHint) {
 	d.inner.DeleteHint(dataItem{Key: key, Index: txn}, hint)
 }
 
-func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
+func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {
 	iter := d.inner.Iter()
 	defer iter.Release()
 
@@ -48,7 +48,7 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, error) {
 		return nil, TxnVersion{}, nil
 	}
 	if item.Estimate {
-		return nil, TxnVersion{}, ErrReadError{BlockingTxn: item.Index}
+		return nil, TxnVersion{}, &ErrReadError{BlockingTxn: item.Index}
 	}
 	return item.Value, item.Version(), nil
 }

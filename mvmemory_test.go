@@ -44,17 +44,17 @@ func TestMVMemoryRecord(t *testing.T) {
 	require.False(t, mv.ValidateReadSet(3))
 
 	value, version, err := mv.Read(Key("a"), 1)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.Equal(t, Value("1"), value)
 	require.Equal(t, TxnVersion{0, 0}, version)
 
 	_, _, err = mv.Read(Key("a"), 2)
-	require.Error(t, err)
-	require.Equal(t, TxnIndex(1), err.(ErrReadError).BlockingTxn)
+	require.NotNil(t, err)
+	require.Equal(t, TxnIndex(1), err.BlockingTxn)
 
 	_, _, err = mv.Read(Key("a"), 3)
-	require.Error(t, err)
-	require.Equal(t, TxnIndex(2), err.(ErrReadError).BlockingTxn)
+	require.NotNil(t, err)
+	require.Equal(t, TxnIndex(2), err.BlockingTxn)
 
 	// rerun tx 1
 	wroteNewLocation = mv.Record(TxnVersion{1, 1}, ReadSet{
@@ -89,17 +89,17 @@ func TestMVMemoryRecord(t *testing.T) {
 	require.False(t, mv.ValidateReadSet(3))
 
 	value, version, err = mv.Read(Key("a"), 2)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.Equal(t, Value("2"), value)
 	require.Equal(t, TxnVersion{1, 1}, version)
 
 	value, version, err = mv.Read(Key("a"), 3)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.Equal(t, Value("3"), value)
 	require.Equal(t, TxnVersion{2, 1}, version)
 
 	value, version, err = mv.Read(Key("c"), 3)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.Equal(t, Value("2"), value)
 	require.Equal(t, TxnVersion{1, 1}, version)
 }

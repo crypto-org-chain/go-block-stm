@@ -30,7 +30,7 @@ func (s *MVMemoryView) Get(key Key) (Value, error) {
 	value, version, err := s.mvMemory.Read(key, s.txn)
 	if err != nil {
 		// return `(READ_ERROR, blocking_txn_id)` from the VM.execute
-		return nil, err
+		return nil, *err
 	}
 
 	if value == nil {
