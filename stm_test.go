@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/cometbft/cometbft/crypto/secp256k1"
 	"github.com/test-go/testify/require"
-
-	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 )
 
 func Tx1(sender string) Tx {
