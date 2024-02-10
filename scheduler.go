@@ -14,15 +14,15 @@ const (
 )
 
 type TxDependency struct {
-	mutex      sync.Mutex
+	sync.Mutex
 	dependents []TxnIndex
 }
 
 func (t *TxDependency) Swap(new []TxnIndex) []TxnIndex {
-	t.mutex.Lock()
+	t.Lock()
 	old := t.dependents
 	t.dependents = new
-	t.mutex.Unlock()
+	t.Unlock()
 	return old
 }
 
@@ -143,12 +143,12 @@ func (s *Scheduler) NextTask() (TxnVersion, TaskKind) {
 // AddDependency adds a dependency between two transactions, returns false if tx is already executed
 func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	entry := &s.txn_dependency[blocking_txn]
-	entry.mutex.Lock()
+	entry.Lock()
 
 	// thread holds 2 locks
 	if ok, _ := s.txn_status[blocking_txn].IsExecuted(); ok {
 		// dependency resolved before locking in Line 148
-		entry.mutex.Unlock()
+		entry.Unlock()
 		return false
 	}
 
@@ -156,7 +156,7 @@ func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	s.txn_status[txn].SetStatus(StatusAborting)
 
 	entry.dependents = append(entry.dependents, txn)
-	entry.mutex.Unlock()
+	entry.Unlock()
 
 	// execution task aborted due to a dependency
 	DecreaseAtomic(&s.num_active_tasks)

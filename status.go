@@ -12,57 +12,57 @@ const (
 )
 
 type StatusEntry struct {
-	mutex sync.Mutex
+	sync.Mutex
 
 	incarnation Incarnation
 	status      Status
 }
 
 func (s *StatusEntry) IsExecuted() (ok bool, incarnation Incarnation) {
-	s.mutex.Lock()
+	s.Lock()
 	if s.status == StatusExecuted {
 		ok = true
 		incarnation = s.incarnation
 	}
-	s.mutex.Unlock()
+	s.Unlock()
 	return
 }
 
 func (s *StatusEntry) TrySetExecuting() (Incarnation, bool) {
-	s.mutex.Lock()
+	s.Lock()
 
 	if s.status == StatusReadyToExecute {
 		s.status = StatusExecuting
 		incarnation := s.incarnation
-		s.mutex.Unlock()
+		s.Unlock()
 		return incarnation, true
 	}
-	s.mutex.Unlock()
+	s.Unlock()
 	return 0, false
 }
 
 func (s *StatusEntry) SetStatus(status Status) {
-	s.mutex.Lock()
+	s.Lock()
 	s.status = status
-	s.mutex.Unlock()
+	s.Unlock()
 }
 
 func (s *StatusEntry) TryValidationAbort(incarnation Incarnation) bool {
-	s.mutex.Lock()
+	s.Lock()
 
 	if s.incarnation == incarnation && s.status == StatusExecuted {
 		s.status = StatusAborting
-		s.mutex.Unlock()
+		s.Unlock()
 		return true
 	}
-	s.mutex.Unlock()
+	s.Unlock()
 	return false
 }
 
 func (s *StatusEntry) SetReadyStatus() {
-	s.mutex.Lock()
+	s.Lock()
 	s.incarnation++
 	// status must be ABORTING
 	s.status = StatusReadyToExecute
-	s.mutex.Unlock()
+	s.Unlock()
 }
