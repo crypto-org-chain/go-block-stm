@@ -1,7 +1,5 @@
 package block_stm
 
-import "errors"
-
 type Executor struct {
 	i         int
 	scheduler *Scheduler
@@ -41,9 +39,10 @@ func (e *Executor) Run() {
 }
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
+	e.scheduler.executedTxns.Add(1)
 	result, err := e.vm.Execute(version.Index)
-	var readErr ErrReadError
-	if errors.As(err, &readErr) {
+	if readErr, ok := err.(ErrReadError); ok { // TODO efficient read error handling
+		e.scheduler.readErrTxns.Add(1)
 		if !e.scheduler.AddDependency(version.Index, readErr.BlockingTxn) {
 			// dependency resolved in the meantime, re-execute
 			return e.TryExecute(version)
@@ -56,9 +55,11 @@ func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
 }
 
 func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
+	e.scheduler.validatedTxns.Add(1)
 	valid := e.mvMemory.ValidateReadSet(version.Index)
 	aborted := !valid && e.scheduler.TryValidationAbort(version)
 	if aborted {
+		e.scheduler.abortedTxns.Add(1)
 		e.mvMemory.ConvertWritesToEstimates(version.Index)
 	}
 	return e.scheduler.FinishValidation(version.Index, aborted)

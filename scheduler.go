@@ -1,6 +1,7 @@
 package block_stm
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -45,6 +46,12 @@ type Scheduler struct {
 	txn_dependency []TxDependency
 	// txn_idx to a mutex-protected pair (incarnation_number, status), where status ∈ {READY_TO_EXECUTE, EXECUTING, EXECUTED, ABORTING}.
 	txn_status []StatusEntry
+
+	// metrics
+	executedTxns  atomic.Int64
+	validatedTxns atomic.Int64
+	abortedTxns   atomic.Int64
+	readErrTxns   atomic.Int64
 }
 
 func NewScheduler(block_size int) *Scheduler {
@@ -186,10 +193,12 @@ func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnV
 
 	deps := s.txn_dependency[version.Index].Swap(nil)
 	s.ResumeDependencies(deps)
-	if s.validation_idx.Load() > uint64(version.Index) {
+	if s.validation_idx.Load() > uint64(version.Index) { // otherwise index already small enough
 		if !wroteNewPath {
+			// schedule validation for current tx only, don't decrease num_active_tasks
 			return version, TaskKindValidation
 		}
+		// schedule validation for txn_idx and higher txns
 		s.DecreaseValidationIdx(version.Index)
 	}
 	DecreaseAtomic(&s.num_active_tasks)
@@ -211,4 +220,9 @@ func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, Ta
 
 	DecreaseAtomic(&s.num_active_tasks)
 	return InvalidTxnVersion, 0
+}
+
+func (s *Scheduler) Stats() string {
+	return fmt.Sprintf("executed: %d, validated: %d, aborted: %d, readErr: %d",
+		s.executedTxns.Load(), s.validatedTxns.Load(), s.abortedTxns.Load(), s.readErrTxns.Load())
 }

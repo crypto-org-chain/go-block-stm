@@ -1,6 +1,8 @@
 package block_stm
 
-import "sync"
+import (
+	"sync"
+)
 
 func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
 	// Create a new scheduler
@@ -19,6 +21,8 @@ func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
 		}()
 	}
 	wg.Wait()
+
+	// fmt.Println("stats", scheduler.Stats())
 
 	// Write the snapshot into the storage
 	for _, pair := range mv.Snapshot() {

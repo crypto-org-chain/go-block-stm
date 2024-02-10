@@ -2,6 +2,7 @@ package block_stm
 
 import (
 	"bytes"
+	cryptorand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -9,10 +10,20 @@ import (
 	"testing"
 
 	"github.com/test-go/testify/require"
+
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 )
 
 func Tx1(sender string) Tx {
+	privKey := secp256k1.GenPrivKey()
+	signBytes := make([]byte, 1024)
+	cryptorand.Read(signBytes)
+	sig, _ := privKey.Sign(signBytes)
+	pubKey := privKey.PubKey()
 	return func(store KVStore) error {
+		// verify a signature
+		pubKey.VerifySignature(signBytes, sig)
+
 		nonceKey := []byte("nonce" + sender)
 		var nonce uint64
 		v, err := store.Get(nonceKey)
@@ -54,6 +65,22 @@ func testBlock(size int, accounts int) []Tx {
 	return blk
 }
 
+func noConflictBlock(size int) []Tx {
+	blk := make([]Tx, size)
+	for i := 0; i < size; i++ {
+		blk[i] = Tx1(accountName(int64(i)))
+	}
+	return blk
+}
+
+func worstCaseBlock(size int) []Tx {
+	blk := make([]Tx, size)
+	for i := 0; i < size; i++ {
+		blk[i] = Tx1("account0")
+	}
+	return blk
+}
+
 func determisticBlock() []Tx {
 	return []Tx{
 		Tx1("account0"),
@@ -75,18 +102,28 @@ func TestSTM(t *testing.T) {
 		executors int
 	}{
 		{
-			name:      "testBlock(100,80),30",
+			name:      "testBlock(100,80),10",
 			blk:       testBlock(100, 80),
-			executors: 30,
+			executors: 10,
 		},
 		{
-			name:      "testBlock(100,3),30",
+			name:      "testBlock(100,3),10",
 			blk:       testBlock(100, 3),
-			executors: 30,
+			executors: 10,
 		},
 		{
 			name:      "determisticBlock(),5",
 			blk:       determisticBlock(),
+			executors: 5,
+		},
+		{
+			name:      "noConflictBlock(100),5",
+			blk:       noConflictBlock(100),
+			executors: 5,
+		},
+		{
+			name:      "worstCaseBlock(100),5",
+			blk:       worstCaseBlock(100),
 			executors: 5,
 		},
 	}
