@@ -39,17 +39,12 @@ func (e *Executor) Run() {
 }
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
-	e.scheduler.executedTxns.Add(1)
-	result, err := e.vm.Execute(version.Index)
-	if readErr, ok := err.(ErrReadError); ok { // TODO efficient read error handling
-		e.scheduler.readErrTxns.Add(1)
-		if !e.scheduler.AddDependency(version.Index, readErr.BlockingTxn) {
-			// dependency resolved in the meantime, re-execute
-			return e.TryExecute(version)
-		}
+	if e.scheduler.TryNotify(version.Index) {
+		// resume a suspended transaction
 		return InvalidTxnVersion, 0
 	}
-
+	e.scheduler.executedTxns.Add(1)
+	result, _ := e.vm.Execute(version.Index)
 	wroteNewLocation := e.mvMemory.Record(version, result.ReadSet, result.WriteSet)
 	return e.scheduler.FinishExecution(version, wroteNewLocation)
 }

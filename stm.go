@@ -9,7 +9,7 @@ func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
 	blockSize := len(blk)
 	scheduler := NewScheduler(blockSize)
 	mv := NewMVMemory(blockSize)
-	vm := NewVM(storage, mv, blk)
+	vm := NewVM(storage, mv, scheduler, blk)
 
 	wg := sync.WaitGroup{}
 	wg.Add(executors)

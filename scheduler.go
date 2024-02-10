@@ -140,8 +140,8 @@ func (s *Scheduler) NextTask() (TxnVersion, TaskKind) {
 	}
 }
 
-// AddDependency adds a dependency between two transactions, returns false if tx is already executed
-func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
+func (s *Scheduler) WaitForDependency(txn TxnIndex, blocking_txn TxnIndex) *Condvar {
+	cond := NewCondvar()
 	entry := &s.txn_dependency[blocking_txn]
 	entry.Lock()
 
@@ -149,30 +149,28 @@ func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	if ok, _ := s.txn_status[blocking_txn].IsExecuted(); ok {
 		// dependency resolved before locking in Line 148
 		entry.Unlock()
-		return false
+		return nil
 	}
 
-	// previous status must be EXECUTING
-	s.txn_status[txn].SetStatus(StatusAborting)
-
+	s.txn_status[txn].Suspend(cond)
 	entry.dependents = append(entry.dependents, txn)
 	entry.Unlock()
 
-	// execution task aborted due to a dependency
-	DecreaseAtomic(&s.num_active_tasks)
-	return true
+	return cond
 }
 
 func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
 	var minIdx TxnIndex = TxnIndex(s.block_size)
 	for _, txn := range txns {
-		s.txn_status[txn].SetReadyStatus()
+		// status must be SUSPENDED
+		s.txn_status[txn].SetStatus(StatusReadyToExecute)
 		if txn < minIdx {
 			minIdx = txn
 		}
 	}
 
 	if minIdx < TxnIndex(s.block_size) {
+		// ensure dependent indices get re-executed
 		s.DecreaseExecutionIdx(minIdx)
 	}
 }
@@ -210,6 +208,14 @@ func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, Ta
 
 	DecreaseAtomic(&s.num_active_tasks)
 	return InvalidTxnVersion, 0
+}
+
+func (s *Scheduler) TryNotify(txn TxnIndex) bool {
+	if s.txn_status[txn].TryNotify() {
+		DecreaseAtomic(&s.num_active_tasks)
+		return true
+	}
+	return false
 }
 
 func (s *Scheduler) Stats() string {

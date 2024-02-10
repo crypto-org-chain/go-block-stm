@@ -1,6 +1,7 @@
 package block_stm
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/test-go/testify/require"
@@ -8,31 +9,22 @@ import (
 
 func BenchmarkBlockSTM(b *testing.B) {
 	storage := NewMemDB()
-	// blk := testBlock(10000, 10000)
-	// blk := noConflictBlock(10000)
-	blk := worstCaseBlock(10000)
-	b.Run("worker-1", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			require.NoError(b, ExecuteBlock(storage, blk, 1))
+	testCases := []struct {
+		name  string
+		block []Tx
+	}{
+		{"random-10000/100", testBlock(10000, 100)},
+		{"no-conflict-10000", noConflictBlock(10000)},
+		{"worst-case-10000", worstCaseBlock(10000)},
+	}
+	for _, tc := range testCases {
+		for _, worker := range []int{1, 5, 10, 15, 20} {
+			b.Run(tc.name+"-worker-"+strconv.Itoa(worker), func(b *testing.B) {
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					require.NoError(b, ExecuteBlock(storage, tc.block, worker))
+				}
+			})
 		}
-	})
-	b.Run("worker-5", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			require.NoError(b, ExecuteBlock(storage, blk, 5))
-		}
-	})
-	b.Run("worker-15", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			require.NoError(b, ExecuteBlock(storage, blk, 15))
-		}
-	})
-	b.Run("worker-30", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			require.NoError(b, ExecuteBlock(storage, blk, 30))
-		}
-	})
+	}
 }

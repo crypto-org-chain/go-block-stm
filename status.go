@@ -9,6 +9,7 @@ const (
 	StatusExecuting
 	StatusExecuted
 	StatusAborting
+	StatusSuspended
 )
 
 type StatusEntry struct {
@@ -16,6 +17,8 @@ type StatusEntry struct {
 
 	incarnation Incarnation
 	status      Status
+
+	cond *Condvar
 }
 
 func (s *StatusEntry) IsExecuted() (ok bool, incarnation Incarnation) {
@@ -65,4 +68,24 @@ func (s *StatusEntry) SetReadyStatus() {
 	// status must be ABORTING
 	s.status = StatusReadyToExecute
 	s.Unlock()
+}
+
+func (s *StatusEntry) Suspend(cond *Condvar) {
+	s.Lock()
+	s.cond = cond
+	s.status = StatusSuspended
+	s.Unlock()
+}
+
+func (s *StatusEntry) TryNotify() bool {
+	s.Lock()
+	if s.cond == nil {
+		s.Unlock()
+		return false
+	}
+
+	s.cond.Notify()
+	s.cond = nil
+	s.Unlock()
+	return true
 }
