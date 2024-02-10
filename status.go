@@ -7,7 +7,6 @@ type Status uint
 const (
 	StatusReadyToExecute Status = iota
 	StatusExecuting
-	StatusSuspended
 	StatusExecuted
 	StatusAborting
 )
@@ -19,21 +18,26 @@ type StatusEntry struct {
 	status      Status
 }
 
-func (s *StatusEntry) Get() (status Status, incarnation Incarnation) {
+func (s *StatusEntry) IsExecuted() (ok bool, incarnation Incarnation) {
 	s.mutex.Lock()
-	status, incarnation = s.status, s.incarnation
+	if s.status == StatusExecuted {
+		ok = true
+		incarnation = s.incarnation
+	}
 	s.mutex.Unlock()
 	return
 }
 
-func (s *StatusEntry) SetExecuting() (Incarnation, bool) {
+func (s *StatusEntry) TrySetExecuting() (Incarnation, bool) {
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
 
 	if s.status == StatusReadyToExecute {
 		s.status = StatusExecuting
-		return s.incarnation, true
+		incarnation := s.incarnation
+		s.mutex.Unlock()
+		return incarnation, true
 	}
+	s.mutex.Unlock()
 	return 0, false
 }
 
@@ -45,11 +49,20 @@ func (s *StatusEntry) SetStatus(status Status) {
 
 func (s *StatusEntry) TryValidationAbort(incarnation Incarnation) bool {
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
 
 	if s.incarnation == incarnation && s.status == StatusExecuted {
 		s.status = StatusAborting
+		s.mutex.Unlock()
 		return true
 	}
+	s.mutex.Unlock()
 	return false
+}
+
+func (s *StatusEntry) SetReadyStatus() {
+	s.mutex.Lock()
+	s.incarnation++
+	// status must be ABORTING
+	s.status = StatusReadyToExecute
+	s.mutex.Unlock()
 }

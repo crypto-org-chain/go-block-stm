@@ -20,9 +20,9 @@ type TxDependency struct {
 
 func (t *TxDependency) Swap(new []TxnIndex) []TxnIndex {
 	t.mutex.Lock()
-	defer t.mutex.Unlock()
 	old := t.dependents
 	t.dependents = new
+	t.mutex.Unlock()
 	return old
 }
 
@@ -89,8 +89,7 @@ func (s *Scheduler) CheckDone() {
 
 func (s *Scheduler) TryIncarnate(idx TxnIndex) TxnVersion {
 	if int(idx) < s.block_size {
-		incarnation, ok := s.txn_status[idx].SetExecuting()
-		if ok {
+		if incarnation, ok := s.txn_status[idx].TrySetExecuting(); ok {
 			return TxnVersion{idx, incarnation}
 		}
 	}
@@ -120,8 +119,7 @@ func (s *Scheduler) NextVersionToValidate() TxnVersion {
 	IncreaseAtomic(&s.num_active_tasks)
 	idx_to_validate := s.validation_idx.Add(1) - 1
 	if idx_to_validate < uint64(s.block_size) {
-		status, incarnation := s.txn_status[idx_to_validate].Get()
-		if status == StatusExecuted {
+		if ok, incarnation := s.txn_status[idx_to_validate].IsExecuted(); ok {
 			return TxnVersion{TxnIndex(idx_to_validate), incarnation}
 		}
 	}
@@ -146,11 +144,11 @@ func (s *Scheduler) NextTask() (TxnVersion, TaskKind) {
 func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	entry := &s.txn_dependency[blocking_txn]
 	entry.mutex.Lock()
-	defer entry.mutex.Unlock()
 
-	status, _ := s.txn_status[blocking_txn].Get()
-	if status == StatusExecuted {
+	// thread holds 2 locks
+	if ok, _ := s.txn_status[blocking_txn].IsExecuted(); ok {
 		// dependency resolved before locking in Line 148
+		entry.mutex.Unlock()
 		return false
 	}
 
@@ -158,25 +156,17 @@ func (s *Scheduler) AddDependency(txn TxnIndex, blocking_txn TxnIndex) bool {
 	s.txn_status[txn].SetStatus(StatusAborting)
 
 	entry.dependents = append(entry.dependents, txn)
+	entry.mutex.Unlock()
+
+	// execution task aborted due to a dependency
 	DecreaseAtomic(&s.num_active_tasks)
 	return true
-}
-
-func (s *Scheduler) SetReadyStatus(txn TxnIndex) {
-	entry := &s.txn_status[txn]
-
-	entry.mutex.Lock()
-	defer entry.mutex.Unlock()
-
-	entry.incarnation++
-	// status must be ABORTING
-	entry.status = StatusReadyToExecute
 }
 
 func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
 	var minIdx TxnIndex = TxnIndex(s.block_size)
 	for _, txn := range txns {
-		s.SetReadyStatus(txn)
+		s.txn_status[txn].SetReadyStatus()
 		if txn < minIdx {
 			minIdx = txn
 		}
@@ -211,7 +201,7 @@ func (s *Scheduler) TryValidationAbort(version TxnVersion) bool {
 
 func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, TaskKind) {
 	if aborted {
-		s.SetReadyStatus(txn)
+		s.txn_status[txn].SetReadyStatus()
 		s.DecreaseValidationIdx(txn + 1)
 		if s.execution_idx.Load() > uint64(txn) {
 			return s.TryIncarnate(txn), TaskKindExecution
