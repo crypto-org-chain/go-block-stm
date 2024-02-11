@@ -2,35 +2,61 @@ package block_stm
 
 import (
 	"bytes"
+	"sync"
 
 	"github.com/tidwall/btree"
 )
 
 type MVData struct {
+	sync.Mutex
 	inner btree.BTreeG[dataItem]
 }
 
 func NewMVData() *MVData {
-	return &MVData{inner: *btree.NewBTreeG[dataItem](dataItemLess)}
+	return &MVData{
+		inner: *btree.NewBTreeGOptions[dataItem](dataItemLess, btree.Options{
+			// concurrency unsafe tree, protected by custom mutex
+			NoLocks: true,
+		})}
+}
+
+func (d *MVData) getTree(key Key) *btree.BTreeG[secondaryDataItem] {
+	d.Lock()
+	item, ok := d.inner.Get(dataItem{Key: key})
+	if !ok {
+		// concurrency safe tree
+		tree := btree.NewBTreeG[secondaryDataItem](secondaryDataItemLess)
+		d.inner.Set(dataItem{Key: key, Tree: tree})
+		d.Unlock()
+		return tree
+	}
+	d.Unlock()
+	return item.Tree
 }
 
 func (d *MVData) Write(key Key, value Value, version TxnVersion) {
-	d.inner.Set(dataItem{Key: key, Index: version.Index, Incarnation: version.Incarnation, Value: value})
+	tree := d.getTree(key)
+	tree.Set(secondaryDataItem{Index: version.Index, Incarnation: version.Incarnation, Value: value})
 }
 
 func (d *MVData) WriteEstimate(key Key, txn TxnIndex) {
-	d.inner.Set(dataItem{Key: key, Index: txn, Estimate: true})
+	tree := d.getTree(key)
+	tree.Set(secondaryDataItem{Index: txn, Estimate: true})
 }
 
 func (d *MVData) Delete(key Key, txn TxnIndex) {
-	d.inner.Delete(dataItem{Key: key, Index: txn})
+	tree := d.getTree(key)
+	tree.Set(secondaryDataItem{Index: txn, Estimate: true})
+	tree.Delete(secondaryDataItem{Index: txn})
 }
 
 func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {
-	iter := d.inner.Iter()
+	tree := d.getTree(key)
+
+	iter := tree.Iter()
 	defer iter.Release()
 
-	if iter.Seek(dataItem{Key: key, Index: txn}) {
+	if iter.Seek(secondaryDataItem{Index: txn}) {
 		if !iter.Prev() {
 			return nil, TxnVersion{}, nil
 		}
@@ -41,10 +67,6 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) 
 	}
 
 	item := iter.Item()
-
-	if !bytes.Equal(item.Key, key) {
-		return nil, TxnVersion{}, nil
-	}
 	if item.Estimate {
 		return nil, TxnVersion{}, &ErrReadError{BlockingTxn: item.Index}
 	}
@@ -54,28 +76,22 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) 
 func (d *MVData) Snapshot() []KVPair {
 	var snapshot []KVPair
 
-	var lastPair KVPair
-	d.inner.Scan(func(item dataItem) bool {
+	d.Lock()
+	d.inner.Scan(func(outer dataItem) bool {
+		item, ok := outer.Tree.Max()
+		if !ok {
+			return true
+		}
+
 		if item.Estimate {
 			return true
 		}
 
-		if lastPair.Key == nil {
-			lastPair = KVPair{Key: item.Key, Value: item.Value}
-			return true
-		}
-
-		if bytes.Equal(item.Key, lastPair.Key) {
-			lastPair.Value = item.Value
-			return true
-		}
-
-		snapshot = append(snapshot, lastPair)
-		lastPair = KVPair{Key: item.Key, Value: item.Value}
+		snapshot = append(snapshot, KVPair{Key: outer.Key, Value: item.Value})
 		return true
 	})
+	d.Unlock()
 
-	snapshot = append(snapshot, lastPair)
 	return snapshot
 }
 
@@ -85,24 +101,25 @@ type KVPair struct {
 }
 
 type dataItem struct {
-	Key         Key
+	Key  Key
+	Tree *btree.BTreeG[secondaryDataItem]
+}
+
+func dataItemLess(a, b dataItem) bool {
+	return bytes.Compare(a.Key, b.Key) < 0
+}
+
+type secondaryDataItem struct {
 	Index       TxnIndex
 	Incarnation Incarnation
 	Value       []byte
 	Estimate    bool
 }
 
-func dataItemLess(a, b dataItem) bool {
-	switch bytes.Compare(a.Key, b.Key) {
-	case -1:
-		return true
-	case 1:
-		return false
-	default:
-		return a.Index < b.Index
-	}
+func secondaryDataItemLess(a, b secondaryDataItem) bool {
+	return a.Index < b.Index
 }
 
-func (item dataItem) Version() TxnVersion {
+func (item secondaryDataItem) Version() TxnVersion {
 	return TxnVersion{Index: item.Index, Incarnation: item.Incarnation}
 }
