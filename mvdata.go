@@ -6,8 +6,6 @@ import (
 	"github.com/tidwall/btree"
 )
 
-type PathHint = btree.PathHint
-
 type MVData struct {
 	inner btree.BTreeG[dataItem]
 }
@@ -16,16 +14,16 @@ func NewMVData() *MVData {
 	return &MVData{inner: *btree.NewBTreeG[dataItem](dataItemLess)}
 }
 
-func (d *MVData) Write(key Key, value Value, version TxnVersion, hint *PathHint) {
-	d.inner.SetHint(dataItem{Key: key, Index: version.Index, Incarnation: version.Incarnation, Value: value}, hint)
+func (d *MVData) Write(key Key, value Value, version TxnVersion) {
+	d.inner.Set(dataItem{Key: key, Index: version.Index, Incarnation: version.Incarnation, Value: value})
 }
 
-func (d *MVData) WriteEstimate(key Key, txn TxnIndex, hint *PathHint) {
-	d.inner.SetHint(dataItem{Key: key, Index: txn, Estimate: true}, hint)
+func (d *MVData) WriteEstimate(key Key, txn TxnIndex) {
+	d.inner.Set(dataItem{Key: key, Index: txn, Estimate: true})
 }
 
-func (d *MVData) Delete(key Key, txn TxnIndex, hint *PathHint) {
-	d.inner.DeleteHint(dataItem{Key: key, Index: txn}, hint)
+func (d *MVData) Delete(key Key, txn TxnIndex) {
+	d.inner.Delete(dataItem{Key: key, Index: txn})
 }
 
 func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {

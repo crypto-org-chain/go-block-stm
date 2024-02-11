@@ -22,9 +22,8 @@ func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSe
 	newLocations := make([]Key, 0, writeSet.Len())
 
 	// apply_write_set
-	var hint PathHint
 	writeSet.Scan(func(key Key, value Value) bool {
-		mv.data.Write(key, value, version, &hint)
+		mv.data.Write(key, value, version)
 		newLocations = append(newLocations, key)
 		return true
 	})
@@ -38,15 +37,12 @@ func (mv *MVMemory) Record(version TxnVersion, readSet ReadSet, writeSet WriteSe
 func (mv *MVMemory) rcuUpdateWrittenLocations(txn TxnIndex, newLocations []Key) bool {
 	prevLocations := mv.readLastWrittenLocations(txn)
 
-	var (
-		hint             PathHint
-		wroteNewLocation bool
-	)
+	var wroteNewLocation bool
 	DiffOrderedList(prevLocations, newLocations, func(key Key, is_new bool) bool {
 		if is_new {
 			wroteNewLocation = true
 		} else {
-			mv.data.Delete(key, txn, &hint)
+			mv.data.Delete(key, txn)
 		}
 		return true
 	})
@@ -56,9 +52,8 @@ func (mv *MVMemory) rcuUpdateWrittenLocations(txn TxnIndex, newLocations []Key) 
 }
 
 func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
-	var hint PathHint
 	for _, key := range mv.readLastWrittenLocations(txn) {
-		mv.data.WriteEstimate(key, txn, &hint)
+		mv.data.WriteEstimate(key, txn)
 	}
 }
 
