@@ -3,59 +3,51 @@ package block_stm
 import (
 	"bytes"
 	"sync"
-
-	"github.com/tidwall/btree"
 )
 
 type MVData struct {
 	sync.Mutex
-	inner btree.BTreeG[dataItem]
+	inner BTree[dataItem]
 }
 
 func NewMVData() *MVData {
 	return &MVData{
-		inner: *btree.NewBTreeGOptions[dataItem](dataItemLess, btree.Options{
-			// concurrency unsafe tree, protected by custom mutex
-			NoLocks: true,
-		})}
+		inner: *NewBTree[dataItem](dataItemLess),
+	}
 }
 
-func (d *MVData) getTree(key Key) *btree.BTreeG[secondaryDataItem] {
-	d.Lock()
-	item, ok := d.inner.Get(dataItem{Key: key})
-	if !ok {
-		// concurrency safe tree
-		tree := btree.NewBTreeG[secondaryDataItem](secondaryDataItemLess)
-		d.inner.Set(dataItem{Key: key, Tree: tree})
-		d.Unlock()
-		return tree
-	}
-	d.Unlock()
-	return item.Tree
+func (d *MVData) getTreeOrDefault(key Key) *BTree[secondaryDataItem] {
+	return d.inner.GetOrDefault(dataItem{Key: key}, func() dataItem {
+		return dataItem{Key: key, Tree: NewBTree[secondaryDataItem](secondaryDataItemLess)}
+	}).Tree
 }
 
 func (d *MVData) Write(key Key, value Value, version TxnVersion) {
-	tree := d.getTree(key)
+	tree := d.getTreeOrDefault(key)
 	tree.Set(secondaryDataItem{Index: version.Index, Incarnation: version.Incarnation, Value: value})
 }
 
 func (d *MVData) WriteEstimate(key Key, txn TxnIndex) {
-	tree := d.getTree(key)
+	tree := d.getTreeOrDefault(key)
 	tree.Set(secondaryDataItem{Index: txn, Estimate: true})
 }
 
 func (d *MVData) Delete(key Key, txn TxnIndex) {
-	tree := d.getTree(key)
+	tree := d.getTreeOrDefault(key)
 	tree.Set(secondaryDataItem{Index: txn, Estimate: true})
 	tree.Delete(secondaryDataItem{Index: txn})
 }
 
 func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {
-	tree := d.getTree(key)
+	outer, ok := d.inner.Get(dataItem{Key: key})
+	if !ok {
+		return nil, TxnVersion{}, nil
+	}
 
-	iter := tree.Iter()
-	defer iter.Release()
+	outer.Tree.Lock()
+	defer outer.Tree.Unlock()
 
+	iter := outer.Tree.Inner.Iter()
 	if iter.Seek(secondaryDataItem{Index: txn}) {
 		if !iter.Prev() {
 			return nil, TxnVersion{}, nil
@@ -102,7 +94,7 @@ type KVPair struct {
 
 type dataItem struct {
 	Key  Key
-	Tree *btree.BTreeG[secondaryDataItem]
+	Tree *BTree[secondaryDataItem]
 }
 
 func dataItemLess(a, b dataItem) bool {
