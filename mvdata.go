@@ -34,7 +34,6 @@ func (d *MVData) WriteEstimate(key Key, txn TxnIndex) {
 
 func (d *MVData) Delete(key Key, txn TxnIndex) {
 	tree := d.getTreeOrDefault(key)
-	tree.Set(secondaryDataItem{Index: txn, Estimate: true})
 	tree.Delete(secondaryDataItem{Index: txn})
 }
 
