@@ -17,8 +17,10 @@ func NewMVData() *MVData {
 }
 
 func (d *MVData) getTreeOrDefault(key Key) *BTree[secondaryDataItem] {
-	return d.inner.GetOrDefault(dataItem{Key: key}, func() dataItem {
-		return dataItem{Key: key, Tree: NewBTree[secondaryDataItem](secondaryDataItemLess)}
+	return d.inner.GetOrDefault(dataItem{Key: key}, func(item *dataItem) {
+		if item.Tree == nil {
+			item.Tree = NewBTree[secondaryDataItem](secondaryDataItemLess)
+		}
 	}).Tree
 }
 
@@ -43,10 +45,7 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) 
 		return nil, TxnVersion{}, nil
 	}
 
-	outer.Tree.Lock()
-	defer outer.Tree.Unlock()
-
-	iter := outer.Tree.Inner.Iter()
+	iter := outer.Tree.Iter()
 	if iter.Seek(secondaryDataItem{Index: txn}) {
 		if !iter.Prev() {
 			return nil, TxnVersion{}, nil
