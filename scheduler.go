@@ -2,6 +2,7 @@ package block_stm
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 )
@@ -85,6 +86,8 @@ func (s *Scheduler) CheckDone() {
 			s.done_marker.Store(true)
 		}
 	}
+	// avoid busy waiting
+	runtime.Gosched()
 }
 
 func (s *Scheduler) TryIncarnate(idx TxnIndex) TxnVersion {
