@@ -50,13 +50,13 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) 
 		return nil, TxnVersion{}, nil
 	}
 
-	iter := tree.Iter()
-	// index order is reversed
-	if !iter.Seek(secondaryDataItem{Index: txn - 1}) {
+	// index order is reversed,
+	// find the closing txn that's less than the given txn
+	item, ok := tree.Seek(secondaryDataItem{Index: txn - 1})
+	if !ok {
 		return nil, TxnVersion{}, nil
 	}
 
-	item := iter.Item()
 	if item.Estimate {
 		return nil, TxnVersion{}, &ErrReadError{BlockingTxn: item.Index}
 	}
@@ -67,6 +67,7 @@ func (d *MVData) Snapshot() []KVPair {
 	var snapshot []KVPair
 
 	d.Scan(func(outer dataItem) bool {
+		// index order is reversed, `Min` is the latest
 		item, ok := outer.Tree.Min()
 		if !ok {
 			return true

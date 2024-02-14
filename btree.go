@@ -74,6 +74,12 @@ func (bt *BTree[T]) Min() (item T, ok bool) {
 	return bt.Load().Min()
 }
 
-func (bt *BTree[T]) Iter() btree.IterG[T] {
-	return bt.Load().Iter()
+func (bt *BTree[T]) Seek(item T) (T, bool) {
+	var empty T
+	iter := bt.Load().Iter()
+	if !iter.Seek(item) {
+		return empty, false
+	}
+
+	return iter.Item(), true
 }
