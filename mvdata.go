@@ -2,22 +2,23 @@ package block_stm
 
 import (
 	"bytes"
-	"sync"
 )
 
 type MVData struct {
-	sync.Mutex
-	inner BTree[dataItem]
+	BTree[dataItem]
 }
 
 func NewMVData() *MVData {
-	return &MVData{
-		inner: *NewBTree[dataItem](dataItemLess),
-	}
+	return &MVData{*NewBTree[dataItem](dataItemLess)}
+}
+
+func (d *MVData) getTree(key Key) *BTree[secondaryDataItem] {
+	outer, _ := d.Get(dataItem{Key: key})
+	return outer.Tree
 }
 
 func (d *MVData) getTreeOrDefault(key Key) *BTree[secondaryDataItem] {
-	return d.inner.GetOrDefault(dataItem{Key: key}, func(item *dataItem) {
+	return d.GetOrDefault(dataItem{Key: key}, func(item *dataItem) {
 		if item.Tree == nil {
 			item.Tree = NewBTree[secondaryDataItem](secondaryDataItemLess)
 		}
@@ -44,12 +45,12 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) 
 		return nil, TxnVersion{}, nil
 	}
 
-	outer, ok := d.inner.Get(dataItem{Key: key})
-	if !ok {
+	tree := d.getTree(key)
+	if tree == nil {
 		return nil, TxnVersion{}, nil
 	}
 
-	iter := outer.Tree.Iter()
+	iter := tree.Iter()
 	// index order is reversed
 	if !iter.Seek(secondaryDataItem{Index: txn - 1}) {
 		return nil, TxnVersion{}, nil
@@ -65,8 +66,7 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) 
 func (d *MVData) Snapshot() []KVPair {
 	var snapshot []KVPair
 
-	d.Lock()
-	d.inner.Scan(func(outer dataItem) bool {
+	d.Scan(func(outer dataItem) bool {
 		item, ok := outer.Tree.Min()
 		if !ok {
 			return true
@@ -79,7 +79,6 @@ func (d *MVData) Snapshot() []KVPair {
 		snapshot = append(snapshot, KVPair{Key: outer.Key, Value: item.Value})
 		return true
 	})
-	d.Unlock()
 
 	return snapshot
 }
