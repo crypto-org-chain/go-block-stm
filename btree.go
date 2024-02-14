@@ -70,6 +70,10 @@ func (bt *BTree[T]) Max() (item T, ok bool) {
 	return bt.Load().Max()
 }
 
+func (bt *BTree[T]) Min() (item T, ok bool) {
+	return bt.Load().Min()
+}
+
 func (bt *BTree[T]) Iter() btree.IterG[T] {
 	return bt.Load().Iter()
 }

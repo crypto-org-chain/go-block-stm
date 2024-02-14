@@ -40,20 +40,19 @@ func (d *MVData) Delete(key Key, txn TxnIndex) {
 }
 
 func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {
+	if txn == 0 {
+		return nil, TxnVersion{}, nil
+	}
+
 	outer, ok := d.inner.Get(dataItem{Key: key})
 	if !ok {
 		return nil, TxnVersion{}, nil
 	}
 
 	iter := outer.Tree.Iter()
-	if iter.Seek(secondaryDataItem{Index: txn}) {
-		if !iter.Prev() {
-			return nil, TxnVersion{}, nil
-		}
-	} else {
-		if !iter.Last() {
-			return nil, TxnVersion{}, nil
-		}
+	// index order is reversed
+	if !iter.Seek(secondaryDataItem{Index: txn - 1}) {
+		return nil, TxnVersion{}, nil
 	}
 
 	item := iter.Item()
@@ -68,7 +67,7 @@ func (d *MVData) Snapshot() []KVPair {
 
 	d.Lock()
 	d.inner.Scan(func(outer dataItem) bool {
-		item, ok := outer.Tree.Max()
+		item, ok := outer.Tree.Min()
 		if !ok {
 			return true
 		}
@@ -107,7 +106,8 @@ type secondaryDataItem struct {
 }
 
 func secondaryDataItemLess(a, b secondaryDataItem) bool {
-	return a.Index < b.Index
+	// reverse the order
+	return a.Index > b.Index
 }
 
 func (item secondaryDataItem) Version() TxnVersion {
