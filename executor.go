@@ -44,7 +44,7 @@ func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
 		return InvalidTxnVersion, 0
 	}
 	e.scheduler.executedTxns.Add(1)
-	result, _ := e.vm.Execute(version.Index)
+	result := e.vm.Execute(version.Index)
 	wroteNewLocation := e.mvMemory.Record(version, result.ReadSet, result.WriteSet)
 	return e.scheduler.FinishExecution(version, wroteNewLocation)
 }

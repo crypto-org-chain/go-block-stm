@@ -3,6 +3,7 @@ package block_stm
 type VMResult struct {
 	ReadSet  ReadSet
 	WriteSet WriteSet
+	err      error
 }
 
 type KVStore interface {
@@ -28,12 +29,10 @@ func NewVM(storage KVStore, mvMemory *MVMemory, scheduler *Scheduler, txs []Tx) 
 	}
 }
 
-func (vm *VM) Execute(txn TxnIndex) (*VMResult, error) {
+func (vm *VM) Execute(txn TxnIndex) *VMResult {
 	view := NewMVMemoryView(vm.storage, vm.mvMemory, vm.scheduler, txn)
 	err := vm.txs[txn](view)
-	if err != nil {
-		return nil, err
-	}
-
-	return view.VMResult(), nil
+	result := view.VMResult()
+	result.err = err
+	return result
 }
