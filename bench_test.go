@@ -18,6 +18,12 @@ func BenchmarkBlockSTM(b *testing.B) {
 		{"worst-case-10000", worstCaseBlock(10000)},
 	}
 	for _, tc := range testCases {
+		b.Run(tc.name+"-sequential", func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				runSequential(storage, tc.block)
+			}
+		})
 		for _, worker := range []int{1, 5, 10, 15, 20} {
 			b.Run(tc.name+"-worker-"+strconv.Itoa(worker), func(b *testing.B) {
 				b.ResetTimer()
@@ -26,5 +32,11 @@ func BenchmarkBlockSTM(b *testing.B) {
 				}
 			})
 		}
+	}
+}
+
+func runSequential(storage KVStore, block []Tx) {
+	for _, tx := range block {
+		tx(storage)
 	}
 }
