@@ -22,3 +22,5 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/tidwall/btree => github.com/yihuang/btree v0.0.0-20240215071918-6726a9b22e40

@@ -13,11 +13,13 @@ type BTree[T any] struct {
 
 // NewBTree returns a new BTree.
 func NewBTree[T any](less func(a, b T) bool) *BTree[T] {
-	var t BTree[T]
-	t.Store(btree.NewBTreeGOptions[T](less, btree.Options{
-		NoLocks: true,
-	}))
-	return &t
+	tree := btree.NewBTreeGOptions[T](less, btree.Options{
+		NoLocks:  true,
+		ReadOnly: true,
+	})
+	t := &BTree[T]{}
+	t.Store(tree)
+	return t
 }
 
 func (bt *BTree[T]) Get(item T) (result T, ok bool) {
@@ -34,6 +36,7 @@ func (bt *BTree[T]) GetOrDefault(item T, fillDefaults func(*T)) T {
 		fillDefaults(&item)
 		c := t.Copy()
 		c.Set(item)
+		c.Freeze()
 		if bt.CompareAndSwap(t, c) {
 			return item
 		}
@@ -45,6 +48,7 @@ func (bt *BTree[T]) Set(item T) (prev T, ok bool) {
 		t := bt.Load()
 		c := t.Copy()
 		prev, ok = c.Set(item)
+		c.Freeze()
 		if bt.CompareAndSwap(t, c) {
 			return
 		}
@@ -56,6 +60,7 @@ func (bt *BTree[T]) Delete(item T) (prev T, ok bool) {
 		t := bt.Load()
 		c := t.Copy()
 		prev, ok = c.Delete(item)
+		c.Freeze()
 		if bt.CompareAndSwap(t, c) {
 			return
 		}
