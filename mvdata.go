@@ -40,27 +40,28 @@ func (d *MVData) Delete(key Key, txn TxnIndex) {
 	tree.Delete(secondaryDataItem{Index: txn})
 }
 
-func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {
+// Read returns the value and the version of the value that's less than the given txn.
+// If the value is an estimate, returns `(nil, BlockingTxn, true)`.
+// If the value is not found, returns `(nil, InvalidTxnVersion, false)`.
+// If the value is found, returns `(value, version, false)`.
+func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, bool) {
 	if txn == 0 {
-		return nil, TxnVersion{}, nil
+		return nil, InvalidTxnVersion, false
 	}
 
 	tree := d.getTree(key)
 	if tree == nil {
-		return nil, TxnVersion{}, nil
+		return nil, InvalidTxnVersion, false
 	}
 
 	// index order is reversed,
 	// find the closing txn that's less than the given txn
 	item, ok := tree.Seek(secondaryDataItem{Index: txn - 1})
 	if !ok {
-		return nil, TxnVersion{}, nil
+		return nil, InvalidTxnVersion, false
 	}
 
-	if item.Estimate {
-		return nil, TxnVersion{}, &ErrReadError{BlockingTxn: item.Index}
-	}
-	return item.Value, item.Version(), nil
+	return item.Value, item.Version(), item.Estimate
 }
 
 func (d *MVData) Snapshot() []KVPair {

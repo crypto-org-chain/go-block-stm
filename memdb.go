@@ -45,6 +45,10 @@ func (db *MemDB) Get(key Key) Value {
 	return item.value
 }
 
+func (db *MemDB) Has(key Key) bool {
+	return db.Get(key) != nil
+}
+
 func (db *MemDB) Set(key Key, value Value) {
 	if value == nil {
 		panic("nil value not allowed")

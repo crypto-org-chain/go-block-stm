@@ -30,29 +30,35 @@ func (s *MVMemoryView) Get(key Key) Value {
 	}
 
 	for {
-		value, version, err := s.mvMemory.Read(key, s.txn)
-		if err != nil {
+		value, version, estimate := s.mvMemory.Read(key, s.txn)
+		if estimate {
 			// read ESTIMATE mark, wait for the blocking txn to finish
-			cond := s.scheduler.WaitForDependency(s.txn, err.BlockingTxn)
+			cond := s.scheduler.WaitForDependency(s.txn, version.Index)
 			if cond != nil {
 				cond.Wait()
 			}
 			continue
 		}
 
-		if value == nil {
-			// record version ⊥ when reading from storage
-			s.readSet = append(s.readSet, ReadDescriptor{key, InvalidTxnVersion})
+		// if not found, record version ⊥ when reading from storage
+		s.readSet = append(s.readSet, ReadDescriptor{key, version})
+		if !version.Valid() {
 			return s.storage.Get(key)
 		}
-
-		s.readSet = append(s.readSet, ReadDescriptor{key, version})
 		return value
 	}
 }
 
+func (s *MVMemoryView) Has(key Key) bool {
+	return s.Get(key) != nil
+}
+
 func (s *MVMemoryView) Set(key Key, value Value) {
 	s.writeSet.Set(key, value)
+}
+
+func (s *MVMemoryView) Delete(key Key) {
+	s.Set(key, nil)
 }
 
 func (s *MVMemoryView) Result() (ReadSet, WriteSet) {

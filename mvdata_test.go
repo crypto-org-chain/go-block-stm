@@ -10,8 +10,8 @@ import (
 
 func TestEmptyMVData(t *testing.T) {
 	data := NewMVData()
-	value, _, err := data.Read([]byte("a"), 1)
-	require.Nil(t, err)
+	value, _, estimate := data.Read([]byte("a"), 1)
+	require.False(t, estimate)
 	require.Nil(t, value)
 }
 
@@ -25,51 +25,51 @@ func TestMVData(t *testing.T) {
 	data.Write([]byte("b"), []byte("2"), TxnVersion{Index: 2, Incarnation: 1})
 
 	// read closest version
-	value, _, err := data.Read([]byte("a"), 1)
-	require.Nil(t, err)
+	value, _, estimate := data.Read([]byte("a"), 1)
+	require.False(t, estimate)
 	require.Nil(t, value)
 
 	// read closest version
-	value, version, err := data.Read([]byte("a"), 4)
-	require.Nil(t, err)
+	value, version, estimate := data.Read([]byte("a"), 4)
+	require.False(t, estimate)
 	require.Equal(t, Value([]byte("3")), value)
 	require.Equal(t, TxnVersion{Index: 3, Incarnation: 1}, version)
 
 	// read closest version
-	value, version, err = data.Read([]byte("a"), 3)
-	require.Nil(t, err)
+	value, version, estimate = data.Read([]byte("a"), 3)
+	require.False(t, estimate)
 	require.Equal(t, Value([]byte("2")), value)
 	require.Equal(t, TxnVersion{Index: 2, Incarnation: 1}, version)
 
 	// read closest version
-	value, version, err = data.Read([]byte("b"), 3)
-	require.Nil(t, err)
+	value, version, estimate = data.Read([]byte("b"), 3)
+	require.False(t, estimate)
 	require.Equal(t, Value([]byte("2")), value)
 	require.Equal(t, TxnVersion{Index: 2, Incarnation: 1}, version)
 
 	// new incarnation overrides old
 	data.Write([]byte("a"), []byte("3-2"), TxnVersion{Index: 3, Incarnation: 2})
-	value, version, err = data.Read([]byte("a"), 4)
-	require.Nil(t, err)
+	value, version, estimate = data.Read([]byte("a"), 4)
+	require.False(t, estimate)
 	require.Equal(t, Value([]byte("3-2")), value)
 	require.Equal(t, TxnVersion{Index: 3, Incarnation: 2}, version)
 
 	// read estimate
 	data.WriteEstimate([]byte("a"), 3)
-	_, _, err = data.Read([]byte("a"), 4)
-	require.NotNil(t, err)
-	require.Equal(t, TxnIndex(3), err.BlockingTxn)
+	_, version, estimate = data.Read([]byte("a"), 4)
+	require.True(t, estimate)
+	require.Equal(t, TxnIndex(3), version.Index)
 
 	// delete value
 	data.Delete([]byte("a"), 3)
-	value, version, err = data.Read([]byte("a"), 4)
-	require.Nil(t, err)
+	value, version, estimate = data.Read([]byte("a"), 4)
+	require.False(t, estimate)
 	require.Equal(t, Value([]byte("2")), value)
 	require.Equal(t, TxnVersion{Index: 2, Incarnation: 1}, version)
 
 	data.Delete([]byte("b"), 2)
-	value, _, err = data.Read([]byte("b"), 4)
-	require.Nil(t, err)
+	value, _, estimate = data.Read([]byte("b"), 4)
+	require.False(t, estimate)
 	require.Nil(t, value)
 }
 

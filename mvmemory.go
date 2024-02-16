@@ -57,7 +57,7 @@ func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
 	}
 }
 
-func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, *ErrReadError) {
+func (mv *MVMemory) Read(key Key, txn TxnIndex) (Value, TxnVersion, bool) {
 	return mv.data.Read(key, txn)
 }
 
@@ -65,21 +65,15 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 	// Invariant: at least one `Record` call has been made for `txn`
 	readSet := *mv.lastReadSet[txn].Load()
 	for _, desc := range readSet {
-		value, version, err := mv.Read(desc.key, txn)
-		if err != nil {
+		_, version, estimate := mv.Read(desc.key, txn)
+		if estimate {
 			// previously read entry from data, now ESTIMATE
 			return false
 		}
-		if value == nil {
-			if desc.version.Valid() {
-				// previously read entry from data, now NOT_FOUND
-				return false
-			}
-		} else {
-			if version != desc.version {
-				// read some entry, but not the same as before
-				return false
-			}
+		if version != desc.version {
+			// previously read entry from data, now NOT_FOUND,
+			// or read some entry, but not the same version as before
+			return false
 		}
 	}
 	return true

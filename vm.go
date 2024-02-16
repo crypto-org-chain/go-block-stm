@@ -9,6 +9,7 @@ type VMResult struct {
 type KVStore interface {
 	Get(Key) Value
 	Set(Key, Value)
+	Has(Key) bool
 }
 
 type Tx func(KVStore) error
