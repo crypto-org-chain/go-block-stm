@@ -9,7 +9,7 @@ import (
 func BuildWriteSet(pairs ...KVPair) WriteSet {
 	ws := NewWriteSet()
 	for _, pair := range pairs {
-		ws.MustSet(pair.Key, pair.Value)
+		ws.Set(pair.Key, pair.Value)
 	}
 	return ws
 }

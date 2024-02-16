@@ -37,16 +37,7 @@ func (db *MemDB) Scan(cb func(key Key, value Value) bool) {
 	})
 }
 
-func (db *MemDB) Get(key Key) (Value, error) {
-	return db.MustGet(key), nil
-}
-
-func (db *MemDB) Set(key Key, value Value) error {
-	db.MustSet(key, value)
-	return nil
-}
-
-func (db *MemDB) MustGet(key Key) Value {
+func (db *MemDB) Get(key Key) Value {
 	item, ok := db.BTreeG.Get(memdbItem{key: key})
 	if !ok {
 		return nil
@@ -54,7 +45,7 @@ func (db *MemDB) MustGet(key Key) Value {
 	return item.value
 }
 
-func (db *MemDB) MustSet(key Key, value Value) {
+func (db *MemDB) Set(key Key, value Value) {
 	if value == nil {
 		panic("nil value not allowed")
 	}

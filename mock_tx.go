@@ -49,24 +49,16 @@ func genRandomSignature() func() {
 func increaseNonce(sender string, store KVStore) error {
 	nonceKey := []byte("nonce" + sender)
 	var nonce uint64
-	v, err := store.Get(nonceKey)
-	if err != nil {
-		return err
-	}
+	v := store.Get(nonceKey)
 	if v != nil {
 		nonce = binary.BigEndian.Uint64(v)
 	}
 
 	var bz [8]byte
 	binary.BigEndian.PutUint64(bz[:], nonce+1)
-	if err := store.Set(nonceKey, bz[:]); err != nil {
-		return err
-	}
+	store.Set(nonceKey, bz[:])
 
-	v, err = store.Get(nonceKey)
-	if err != nil {
-		return err
-	}
+	v = store.Get(nonceKey)
 	if binary.BigEndian.Uint64(v) != nonce+1 {
 		return fmt.Errorf("nonce not incremented: %d", binary.BigEndian.Uint64(v))
 	}
@@ -79,19 +71,12 @@ func bankTransfer(sender, receiver string, amount uint64, store KVStore) error {
 	receiverKey := []byte("balance" + receiver)
 
 	var senderBalance, receiverBalance uint64
-	v, err := store.Get(senderKey)
-	if err != nil {
-		return err
-	}
+	v := store.Get(senderKey)
 	if v != nil {
 		senderBalance = binary.BigEndian.Uint64(v)
 	}
 
-	v, err = store.Get(receiverKey)
-	if err != nil {
-		return err
-	}
-
+	v = store.Get(receiverKey)
 	if v != nil {
 		receiverBalance = binary.BigEndian.Uint64(v)
 	}
@@ -105,14 +90,10 @@ func bankTransfer(sender, receiver string, amount uint64, store KVStore) error {
 
 	var bz [8]byte
 	binary.BigEndian.PutUint64(bz[:], senderBalance)
-	if err := store.Set(senderKey, bz[:]); err != nil {
-		return err
-	}
+	store.Set(senderKey, bz[:])
 
 	binary.BigEndian.PutUint64(bz[:], receiverBalance)
-	if err := store.Set(receiverKey, bz[:]); err != nil {
-		return err
-	}
+	store.Set(receiverKey, bz[:])
 
 	return nil
 }

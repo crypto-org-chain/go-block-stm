@@ -23,10 +23,10 @@ func NewMVMemoryView(storage KVStore, mvMemory *MVMemory, schedule *Scheduler, t
 	}
 }
 
-func (s *MVMemoryView) Get(key Key) (Value, error) {
-	if value := s.writeSet.MustGet(key); value != nil {
+func (s *MVMemoryView) Get(key Key) Value {
+	if value := s.writeSet.Get(key); value != nil {
 		// value written by this txn
-		return value, nil
+		return value
 	}
 
 	for {
@@ -47,18 +47,14 @@ func (s *MVMemoryView) Get(key Key) (Value, error) {
 		}
 
 		s.readSet = append(s.readSet, ReadDescriptor{key, version})
-		return value, nil
+		return value
 	}
 }
 
-func (s *MVMemoryView) Set(key Key, value Value) error {
-	s.writeSet.MustSet(key, value)
-	return nil
+func (s *MVMemoryView) Set(key Key, value Value) {
+	s.writeSet.Set(key, value)
 }
 
-func (s *MVMemoryView) VMResult() *VMResult {
-	return &VMResult{
-		ReadSet:  s.readSet,
-		WriteSet: s.writeSet,
-	}
+func (s *MVMemoryView) Result() (ReadSet, WriteSet) {
+	return s.readSet, s.writeSet
 }

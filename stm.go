@@ -26,9 +26,7 @@ func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
 
 	// Write the snapshot into the storage
 	for _, pair := range mv.Snapshot() {
-		if err := storage.Set(pair.Key, pair.Value); err != nil {
-			return err
-		}
+		storage.Set(pair.Key, pair.Value)
 	}
 	return nil
 }
