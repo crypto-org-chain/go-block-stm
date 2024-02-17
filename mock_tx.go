@@ -14,21 +14,21 @@ import (
 // NoopTx verifies a signature and increases the nonce of the sender
 func NoopTx(sender string) Tx {
 	verifySig := genRandomSignature()
-	return func(store KVStore) error {
+	return func(store MultiStore) error {
 		verifySig()
-		return increaseNonce(sender, store)
+		return increaseNonce(sender, store.GetKVStore("acc"))
 	}
 }
 
 func BankTransferTx(sender, receiver string, amount uint64) Tx {
 	verifySig := genRandomSignature()
-	return func(store KVStore) error {
+	return func(store MultiStore) error {
 		verifySig()
-		if err := increaseNonce(sender, store); err != nil {
+		if err := increaseNonce(sender, store.GetKVStore("acc")); err != nil {
 			return err
 		}
 
-		return bankTransfer(sender, receiver, amount, store)
+		return bankTransfer(sender, receiver, amount, store.GetKVStore("bank"))
 	}
 }
 

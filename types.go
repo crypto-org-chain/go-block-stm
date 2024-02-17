@@ -34,3 +34,6 @@ type WriteSet = MemDB
 func NewWriteSet() WriteSet {
 	return *NewMemDBNonConcurrent()
 }
+
+type MultiWriteSet = []WriteSet
+type MultiReadSet = []ReadSet

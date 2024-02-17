@@ -1,8 +1,8 @@
 package block_stm
 
 type VMResult struct {
-	ReadSet  ReadSet
-	WriteSet WriteSet
+	ReadSet  MultiReadSet
+	WriteSet MultiWriteSet
 	Err      error
 }
 
@@ -14,17 +14,23 @@ type KVStore interface {
 	Delete(Key)
 }
 
-type Tx func(KVStore) error
+type MultiStore interface {
+	GetKVStore(string) KVStore
+}
+
+type Tx func(MultiStore) error
 
 type VM struct {
-	storage   KVStore
+	stores    []string
+	storage   MultiStore
 	mvMemory  *MVMemory
 	scheduler *Scheduler
 	txs       []Tx
 }
 
-func NewVM(storage KVStore, mvMemory *MVMemory, scheduler *Scheduler, txs []Tx) *VM {
+func NewVM(stores []string, storage MultiStore, mvMemory *MVMemory, scheduler *Scheduler, txs []Tx) *VM {
 	return &VM{
+		stores:    stores,
 		storage:   storage,
 		mvMemory:  mvMemory,
 		scheduler: scheduler,
@@ -33,7 +39,7 @@ func NewVM(storage KVStore, mvMemory *MVMemory, scheduler *Scheduler, txs []Tx) 
 }
 
 func (vm *VM) Execute(txn TxnIndex) VMResult {
-	view := NewMVMemoryView(vm.storage, vm.mvMemory, vm.scheduler, txn)
+	view := NewMultiMVMemoryView(vm.stores, vm.storage, vm.mvMemory, vm.scheduler, txn)
 	err := vm.txs[txn](view)
 	readSet, writeSet := view.Result()
 	return VMResult{

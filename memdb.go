@@ -76,3 +76,25 @@ func (db *MemDB) OverlayGet(key Key) (Value, bool) {
 func (db *MemDB) OverlaySet(key Key, value Value) {
 	db.BTreeG.Set(memdbItem{key: key, value: value})
 }
+
+type MultiMemDB struct {
+	dbs map[string]*MemDB
+}
+
+func NewMultiMemDB(stores []string) *MultiMemDB {
+	dbs := make(map[string]*MemDB, len(stores))
+	for _, name := range stores {
+		dbs[name] = NewMemDB()
+	}
+	return &MultiMemDB{
+		dbs: dbs,
+	}
+}
+
+func (mmdb *MultiMemDB) GetDB(store string) *MemDB {
+	return mmdb.dbs[store]
+}
+
+func (mmdb *MultiMemDB) GetKVStore(store string) KVStore {
+	return mmdb.GetDB(store)
+}

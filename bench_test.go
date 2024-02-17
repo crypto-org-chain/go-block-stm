@@ -8,7 +8,8 @@ import (
 )
 
 func BenchmarkBlockSTM(b *testing.B) {
-	storage := NewMemDB()
+	stores := []string{"acc", "bank"}
+	storage := NewMultiMemDB(stores)
 	testCases := []struct {
 		name  string
 		block []Tx
@@ -28,14 +29,14 @@ func BenchmarkBlockSTM(b *testing.B) {
 			b.Run(tc.name+"-worker-"+strconv.Itoa(worker), func(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					require.NoError(b, ExecuteBlock(storage, tc.block, worker))
+					require.NoError(b, ExecuteBlock(stores, storage, tc.block, worker))
 				}
 			})
 		}
 	}
 }
 
-func runSequential(storage KVStore, block []Tx) {
+func runSequential(storage MultiStore, block []Tx) {
 	for _, tx := range block {
 		tx(storage)
 	}

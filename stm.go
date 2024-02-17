@@ -4,12 +4,12 @@ import (
 	"sync"
 )
 
-func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
+func ExecuteBlock(stores []string, storage MultiStore, blk []Tx, executors int) error {
 	// Create a new scheduler
 	blockSize := len(blk)
 	scheduler := NewScheduler(blockSize)
-	mv := NewMVMemory(blockSize)
-	vm := NewVM(storage, mv, scheduler, blk)
+	mv := NewMVMemory(blockSize, stores)
+	vm := NewVM(stores, storage, mv, scheduler, blk)
 
 	wg := sync.WaitGroup{}
 	wg.Add(executors)
@@ -25,16 +25,6 @@ func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
 	// fmt.Println("stats", scheduler.Stats())
 
 	// Write the snapshot into the storage
-	WriteSnapshot(storage, mv.Snapshot())
+	mv.WriteSnapshot(storage)
 	return nil
-}
-
-func WriteSnapshot(storage KVStore, snapshot []KVPair) {
-	for _, pair := range snapshot {
-		if pair.Value == nil {
-			storage.Delete(pair.Key)
-		} else {
-			storage.Set(pair.Key, pair.Value)
-		}
-	}
 }

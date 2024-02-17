@@ -5,6 +5,7 @@ type MVMemoryView struct {
 	storage   KVStore
 	mvMemory  *MVMemory
 	scheduler *Scheduler
+	store     int
 
 	txn      TxnIndex
 	readSet  ReadSet
@@ -13,8 +14,9 @@ type MVMemoryView struct {
 
 var _ KVStore = (*MVMemoryView)(nil)
 
-func NewMVMemoryView(storage KVStore, mvMemory *MVMemory, schedule *Scheduler, txn TxnIndex) *MVMemoryView {
+func NewMVMemoryView(store int, storage KVStore, mvMemory *MVMemory, schedule *Scheduler, txn TxnIndex) *MVMemoryView {
 	return &MVMemoryView{
+		store:     store,
 		storage:   storage,
 		mvMemory:  mvMemory,
 		scheduler: schedule,
@@ -31,7 +33,7 @@ func (s *MVMemoryView) Get(key Key) Value {
 	}
 
 	for {
-		value, version, estimate := s.mvMemory.Read(key, s.txn)
+		value, version, estimate := s.mvMemory.Read(s.store, key, s.txn)
 		if estimate {
 			// read ESTIMATE mark, wait for the blocking txn to finish
 			cond := s.scheduler.WaitForDependency(s.txn, version.Index)

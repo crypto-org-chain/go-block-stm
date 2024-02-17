@@ -59,6 +59,7 @@ func determisticBlock() []Tx {
 }
 
 func TestSTM(t *testing.T) {
+	stores := []string{"acc", "bank"}
 	testCases := []struct {
 		name      string
 		blk       []Tx
@@ -93,12 +94,12 @@ func TestSTM(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			storage := NewMemDB()
-			require.NoError(t, ExecuteBlock(storage, tc.blk, tc.executors))
+			storage := NewMultiMemDB(stores)
+			require.NoError(t, ExecuteBlock(stores, storage, tc.blk, tc.executors))
 
 			// check total nonce increased the same amount as the number of transactions
 			var total uint64
-			storage.Scan(func(k Key, v Value) bool {
+			storage.GetDB("acc").Scan(func(k Key, v Value) bool {
 				if !bytes.HasPrefix(k, []byte("nonce")) {
 					return true
 				}
