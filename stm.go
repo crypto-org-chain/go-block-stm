@@ -25,8 +25,16 @@ func ExecuteBlock(storage KVStore, blk []Tx, executors int) error {
 	// fmt.Println("stats", scheduler.Stats())
 
 	// Write the snapshot into the storage
-	for _, pair := range mv.Snapshot() {
-		storage.Set(pair.Key, pair.Value)
-	}
+	WriteSnapshot(storage, mv.Snapshot())
 	return nil
+}
+
+func WriteSnapshot(storage KVStore, snapshot []KVPair) {
+	for _, pair := range snapshot {
+		if pair.Value == nil {
+			storage.Delete(pair.Key)
+		} else {
+			storage.Set(pair.Key, pair.Value)
+		}
+	}
 }

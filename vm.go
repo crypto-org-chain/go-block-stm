@@ -8,8 +8,10 @@ type VMResult struct {
 
 type KVStore interface {
 	Get(Key) Value
-	Set(Key, Value)
 	Has(Key) bool
+	// nil value is not allowed in `Set`
+	Set(Key, Value)
+	Delete(Key)
 }
 
 type Tx func(KVStore) error
@@ -30,11 +32,11 @@ func NewVM(storage KVStore, mvMemory *MVMemory, scheduler *Scheduler, txs []Tx) 
 	}
 }
 
-func (vm *VM) Execute(txn TxnIndex) *VMResult {
+func (vm *VM) Execute(txn TxnIndex) VMResult {
 	view := NewMVMemoryView(vm.storage, vm.mvMemory, vm.scheduler, txn)
 	err := vm.txs[txn](view)
 	readSet, writeSet := view.Result()
-	return &VMResult{
+	return VMResult{
 		ReadSet:  readSet,
 		WriteSet: writeSet,
 		Err:      err,

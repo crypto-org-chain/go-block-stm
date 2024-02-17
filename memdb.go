@@ -19,6 +19,8 @@ type MemDB struct {
 	btree.BTreeG[memdbItem]
 }
 
+var _ KVStore = (*MemDB)(nil)
+
 func NewMemDB() *MemDB {
 	return &MemDB{*btree.NewBTreeG[memdbItem](memdbItemLess)}
 }
@@ -53,5 +55,24 @@ func (db *MemDB) Set(key Key, value Value) {
 	if value == nil {
 		panic("nil value not allowed")
 	}
+	db.BTreeG.Set(memdbItem{key: key, value: value})
+}
+
+func (db *MemDB) Delete(key Key) {
+	db.BTreeG.Delete(memdbItem{key: key})
+}
+
+// When used as an overlay (e.g. WriteSet), it stores the `nil` value to represent deleted keys,
+// so we return seperate bool value for found status.
+func (db *MemDB) OverlayGet(key Key) (Value, bool) {
+	item, ok := db.BTreeG.Get(memdbItem{key: key})
+	if !ok {
+		return nil, false
+	}
+	return item.value, true
+}
+
+// When used as an overlay (e.g. WriteSet), it stores the `nil` value to represent deleted keys,
+func (db *MemDB) OverlaySet(key Key, value Value) {
 	db.BTreeG.Set(memdbItem{key: key, value: value})
 }

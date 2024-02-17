@@ -103,3 +103,40 @@ func TestMVMemoryRecord(t *testing.T) {
 	require.Equal(t, Value("2"), value)
 	require.Equal(t, TxnVersion{1, 1}, version)
 }
+
+func TestMVMemoryDelete(t *testing.T) {
+	mv := NewMVMemory(16)
+	storage := NewMemDB()
+
+	view := NewMVMemoryView(storage, mv, nil, 0)
+	view.Set(Key("a"), Value("1"))
+	view.Set(Key("b"), Value("1"))
+	view.Set(Key("c"), Value("1"))
+	require.True(t, mv.Record(TxnVersion{0, 0}, view.readSet, view.writeSet))
+
+	view = NewMVMemoryView(storage, mv, nil, 1)
+	view.Delete(Key("a"))
+	view.Set(Key("b"), Value("2"))
+	require.True(t, mv.Record(TxnVersion{1, 0}, view.readSet, view.writeSet))
+
+	view = NewMVMemoryView(storage, mv, nil, 2)
+	require.Nil(t, view.Get(Key("a")))
+	require.False(t, view.Has(Key("a")))
+
+	/*
+		value, version, estimate := mv.Read(Key("a"), 2)
+		require.False(t, estimate)
+		require.Nil(t, value)
+		require.Equal(t, TxnVersion{1, 0}, version)
+
+		value, version, estimate = mv.Read(Key("b"), 2)
+		require.False(t, estimate)
+		require.Equal(t, Value("2"), value)
+		require.Equal(t, TxnVersion{1, 0}, version)
+
+		value, version, estimate = mv.Read(Key("c"), 2)
+		require.False(t, estimate)
+		require.Equal(t, Value("1"), value)
+		require.Equal(t, TxnVersion{0, 0}, version)
+	*/
+}

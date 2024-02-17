@@ -24,8 +24,9 @@ func NewMVMemoryView(storage KVStore, mvMemory *MVMemory, schedule *Scheduler, t
 }
 
 func (s *MVMemoryView) Get(key Key) Value {
-	if value := s.writeSet.Get(key); value != nil {
+	if value, found := s.writeSet.OverlayGet(key); found {
 		// value written by this txn
+		// nil value means deleted
 		return value
 	}
 
@@ -40,12 +41,13 @@ func (s *MVMemoryView) Get(key Key) Value {
 			continue
 		}
 
-		// if not found, record version ⊥ when reading from storage
+		// record the read version, invalid version is ⊥.
+		// if not found, record version ⊥ when reading from storage.
 		s.readSet = append(s.readSet, ReadDescriptor{key, version})
-		if !version.Valid() {
-			return s.storage.Get(key)
+		if version.Valid() {
+			return value
 		}
-		return value
+		return s.storage.Get(key)
 	}
 }
 
@@ -54,11 +56,14 @@ func (s *MVMemoryView) Has(key Key) bool {
 }
 
 func (s *MVMemoryView) Set(key Key, value Value) {
-	s.writeSet.Set(key, value)
+	if value == nil {
+		panic("nil value is not allowed")
+	}
+	s.writeSet.OverlaySet(key, value)
 }
 
 func (s *MVMemoryView) Delete(key Key) {
-	s.Set(key, nil)
+	s.writeSet.OverlaySet(key, nil)
 }
 
 func (s *MVMemoryView) Result() (ReadSet, WriteSet) {

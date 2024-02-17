@@ -81,16 +81,31 @@ func TestReadErrConversion(t *testing.T) {
 }
 
 func TestSnapshot(t *testing.T) {
+	storage := NewMemDB()
+	// initial value
+	storage.Set([]byte("a"), []byte("0"))
+	storage.Set([]byte("d"), []byte("0"))
+
 	data := NewMVData()
 	// read closest version
 	data.Write([]byte("a"), []byte("1"), TxnVersion{Index: 1, Incarnation: 1})
 	data.Write([]byte("a"), []byte("2"), TxnVersion{Index: 2, Incarnation: 1})
 	data.Write([]byte("a"), []byte("3"), TxnVersion{Index: 3, Incarnation: 1})
 	data.Write([]byte("b"), []byte("2"), TxnVersion{Index: 2, Incarnation: 1})
+	data.Write([]byte("d"), []byte("1"), TxnVersion{Index: 2, Incarnation: 1})
+	// delete the key "d" in tx 3
+	data.Write([]byte("d"), nil, TxnVersion{Index: 3, Incarnation: 1})
 	data.WriteEstimate([]byte("c"), 2)
 
 	require.Equal(t, []KVPair{
 		{[]byte("a"), []byte("3")},
 		{[]byte("b"), []byte("2")},
+		{[]byte("d"), nil},
 	}, data.Snapshot())
+
+	WriteSnapshot(storage, data.Snapshot())
+	require.Equal(t, Value([]byte("3")), storage.Get([]byte("a")))
+	require.Equal(t, Value([]byte("2")), storage.Get([]byte("b")))
+	require.Equal(t, Value(nil), storage.Get([]byte("d")))
+	require.Equal(t, 2, storage.Len())
 }

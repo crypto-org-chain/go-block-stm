@@ -40,7 +40,7 @@ func (e *Executor) Run() {
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
 	if e.scheduler.TryNotify(version.Index) {
-		// resume a suspended transaction
+		// resumed a suspended transaction
 		return InvalidTxnVersion, 0
 	}
 	e.scheduler.executedTxns.Add(1)

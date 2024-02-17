@@ -12,11 +12,13 @@ func NewMVData() *MVData {
 	return &MVData{*NewBTree[dataItem](dataItemLess)}
 }
 
+// getTree returns `nil` if not found
 func (d *MVData) getTree(key Key) *BTree[secondaryDataItem] {
 	outer, _ := d.Get(dataItem{Key: key})
 	return outer.Tree
 }
 
+// getTreeOrDefault set a new tree atomically if not found.
 func (d *MVData) getTreeOrDefault(key Key) *BTree[secondaryDataItem] {
 	return d.GetOrDefault(dataItem{Key: key}, func(item *dataItem) {
 		if item.Tree == nil {
@@ -41,9 +43,9 @@ func (d *MVData) Delete(key Key, txn TxnIndex) {
 }
 
 // Read returns the value and the version of the value that's less than the given txn.
-// If the value is an estimate, returns `(nil, BlockingTxn, true)`.
-// If the value is not found, returns `(nil, InvalidTxnVersion, false)`.
-// If the value is found, returns `(value, version, false)`.
+// If the key is not found, returns `(nil, InvalidTxnVersion, false)`.
+// If the key is found but value is an estimate, returns `(nil, BlockingTxn, true)`.
+// If the key is found, returns `(value, version, false)`, `value` can be `nil` which means deleted.
 func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, bool) {
 	if txn == 0 {
 		return nil, InvalidTxnVersion, false

@@ -71,10 +71,6 @@ func (bt *BTree[T]) Scan(iter func(item T) bool) {
 	bt.Load().Scan(iter)
 }
 
-func (bt *BTree[T]) Max() (item T, ok bool) {
-	return bt.Load().Max()
-}
-
 func (bt *BTree[T]) Min() (item T, ok bool) {
 	return bt.Load().Min()
 }
