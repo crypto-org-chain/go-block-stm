@@ -3,6 +3,7 @@ package block_stm
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 
 	cryptorand "crypto/rand"
 
@@ -12,23 +13,48 @@ import (
 // Simulated transaction logic for tests and benchmarks
 
 // NoopTx verifies a signature and increases the nonce of the sender
-func NoopTx(sender string) Tx {
+func NoopTx(i int, sender string) Tx {
 	verifySig := genRandomSignature()
 	return func(store MultiStore) error {
 		verifySig()
-		return increaseNonce(sender, store.GetKVStore("acc"))
+		return increaseNonce(i, sender, store.GetKVStore("acc"))
 	}
 }
 
-func BankTransferTx(sender, receiver string, amount uint64) Tx {
-	verifySig := genRandomSignature()
+func BankTransferTx(i int, sender, receiver string, amount uint64) Tx {
+	base := NoopTx(i, sender)
 	return func(store MultiStore) error {
-		verifySig()
-		if err := increaseNonce(sender, store.GetKVStore("acc")); err != nil {
+		if err := base(store); err != nil {
 			return err
 		}
 
-		return bankTransfer(sender, receiver, amount, store.GetKVStore("bank"))
+		return bankTransfer(i, sender, receiver, amount, store.GetKVStore("bank"))
+	}
+}
+
+func IterateTx(i int, sender, receiver string, amount uint64) Tx {
+	base := BankTransferTx(i, sender, receiver, amount)
+	return func(store MultiStore) error {
+		if err := base(store); err != nil {
+			return err
+		}
+
+		// find a nearby account, do a bank transfer
+		accStore := store.GetKVStore("acc")
+
+		it := accStore.Iterator([]byte(sender), nil)
+		defer it.Close()
+
+		var j int
+		for ; it.Valid(); it.Next() {
+			j++
+			if j > 5 {
+				recipient := strings.TrimPrefix(string(it.Key()), "nonce")
+				return bankTransfer(i, sender, recipient, amount, store.GetKVStore("bank"))
+			}
+		}
+
+		return nil
 	}
 }
 
@@ -46,7 +72,7 @@ func genRandomSignature() func() {
 	}
 }
 
-func increaseNonce(sender string, store KVStore) error {
+func increaseNonce(i int, sender string, store KVStore) error {
 	nonceKey := []byte("nonce" + sender)
 	var nonce uint64
 	v := store.Get(nonceKey)
@@ -66,7 +92,7 @@ func increaseNonce(sender string, store KVStore) error {
 	return nil
 }
 
-func bankTransfer(sender, receiver string, amount uint64, store KVStore) error {
+func bankTransfer(i int, sender, receiver string, amount uint64, store KVStore) error {
 	senderKey := []byte("balance" + sender)
 	receiverKey := []byte("balance" + receiver)
 
@@ -88,12 +114,12 @@ func bankTransfer(sender, receiver string, amount uint64, store KVStore) error {
 
 	receiverBalance += amount
 
-	var bz [8]byte
-	binary.BigEndian.PutUint64(bz[:], senderBalance)
-	store.Set(senderKey, bz[:])
+	var bz1, bz2 [8]byte
+	binary.BigEndian.PutUint64(bz1[:], senderBalance)
+	store.Set(senderKey, bz1[:])
 
-	binary.BigEndian.PutUint64(bz[:], receiverBalance)
-	store.Set(receiverKey, bz[:])
+	binary.BigEndian.PutUint64(bz2[:], receiverBalance)
+	store.Set(receiverKey, bz2[:])
 
 	return nil
 }

@@ -1,5 +1,7 @@
 package block_stm
 
+import storetypes "cosmossdk.io/store/types"
+
 type VMResult struct {
 	ReadSet  MultiReadSet
 	WriteSet MultiWriteSet
@@ -12,6 +14,9 @@ type KVStore interface {
 	// nil value is not allowed in `Set`
 	Set(Key, Value)
 	Delete(Key)
+
+	Iterator(start, end Key) storetypes.Iterator
+	ReverseIterator(start, end Key) storetypes.Iterator
 }
 
 type MultiStore interface {

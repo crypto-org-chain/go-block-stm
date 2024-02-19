@@ -66,3 +66,11 @@ func DiffOrderedList(old, new []Key, callback func(Key, bool) bool) {
 		}
 	}
 }
+
+// BytesBeyond returns if a is beyond b in specified iteration order
+func BytesBeyond(a, b []byte, ascending bool) bool {
+	if ascending {
+		return bytes.Compare(a, b) > 0
+	}
+	return bytes.Compare(a, b) < 0
+}

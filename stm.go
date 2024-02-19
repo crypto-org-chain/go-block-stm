@@ -22,8 +22,6 @@ func ExecuteBlock(stores []string, storage MultiStore, blk []Tx, executors int) 
 	}
 	wg.Wait()
 
-	// fmt.Println("stats", scheduler.Stats())
-
 	// Write the snapshot into the storage
 	mv.WriteSnapshot(storage)
 	return nil

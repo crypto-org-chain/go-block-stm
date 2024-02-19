@@ -1,5 +1,7 @@
 package block_stm
 
+import "bytes"
+
 type (
 	TxnIndex    int
 	Incarnation uint
@@ -22,12 +24,26 @@ type (
 )
 
 type ReadDescriptor struct {
-	key Key
-	// invalid version means the key is read from storage
-	version TxnVersion
+	Key Key
+	// invalid Version means the key is read from storage
+	Version TxnVersion
 }
 
-type ReadSet []ReadDescriptor
+type IterationDescriptor struct {
+	// [Start, End) is the initial range of the iterator, an non-exhausted iteration has an effectively smaller range.
+	Start, End Key
+	Ascending  bool
+	// Stop is not `nil` if the iteration is not exhausted and stops at a key before reaching the end of the range,
+	// when replaying, it should also stops at the stop key.
+	Stop Key
+	// Reads is the list of keys that is observed by the iterator.
+	Reads []ReadDescriptor
+}
+
+type ReadSet struct {
+	Reads    []ReadDescriptor
+	Iterates []IterationDescriptor
+}
 
 type WriteSet = MemDB
 
@@ -35,5 +51,15 @@ func NewWriteSet() WriteSet {
 	return *NewMemDBNonConcurrent()
 }
 
-type MultiWriteSet = []WriteSet
-type MultiReadSet = []ReadSet
+type (
+	MultiWriteSet = []WriteSet
+	MultiReadSet  = []ReadSet
+)
+
+type KeyItem interface {
+	GetKey() []byte
+}
+
+func KeyItemLess[T KeyItem](a, b T) bool {
+	return bytes.Compare(a.GetKey(), b.GetKey()) < 0
+}
