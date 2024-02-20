@@ -1,4 +1,4 @@
-`go-block-stm` implements the [block-stm algorithm](), it follows the paper pseudocode pretty closely.
+`go-block-stm` implements the [block-stm algorithm](https://arxiv.org/abs/2203.06871), it follows the paper pseudocode pretty closely.
 
 ### Optimisation
 
