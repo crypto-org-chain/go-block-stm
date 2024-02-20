@@ -42,15 +42,31 @@ func IterateTx(i int, sender, receiver string, amount uint64) Tx {
 		// find a nearby account, do a bank transfer
 		accStore := store.GetKVStore("acc")
 
-		it := accStore.Iterator([]byte(sender), nil)
-		defer it.Close()
+		{
+			it := accStore.Iterator([]byte("nonce"+sender), nil)
+			defer it.Close()
 
-		var j int
-		for ; it.Valid(); it.Next() {
-			j++
-			if j > 5 {
-				recipient := strings.TrimPrefix(string(it.Key()), "nonce")
-				return bankTransfer(i, sender, recipient, amount, store.GetKVStore("bank"))
+			var j int
+			for ; it.Valid(); it.Next() {
+				j++
+				if j > 5 {
+					recipient := strings.TrimPrefix(string(it.Key()), "nonce")
+					return bankTransfer(i, sender, recipient, amount, store.GetKVStore("bank"))
+				}
+			}
+		}
+
+		{
+			it := accStore.ReverseIterator([]byte("nonce"), []byte("nonce"+sender))
+			defer it.Close()
+
+			var j int
+			for ; it.Valid(); it.Next() {
+				j++
+				if j > 5 {
+					recipient := strings.TrimPrefix(string(it.Key()), "nonce")
+					return bankTransfer(i, sender, recipient, amount, store.GetKVStore("bank"))
+				}
 			}
 		}
 

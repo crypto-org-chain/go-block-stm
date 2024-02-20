@@ -25,16 +25,15 @@ type MVIterator struct {
 var _ storetypes.Iterator = (*MVIterator)(nil)
 
 func NewMVIterator(
-	start, end Key, ascending bool,
-	txn TxnIndex, iter btree.IterG[dataItem],
+	opts IteratorOptions, txn TxnIndex, iter btree.IterG[dataItem],
 	waitFn func(TxnIndex),
 ) *MVIterator {
 	it := &MVIterator{
 		BTreeIteratorG: *NewBTreeIteratorG(
-			dataItem{Key: start},
-			dataItem{Key: end},
+			dataItem{Key: opts.Start},
+			dataItem{Key: opts.End},
 			iter,
-			ascending,
+			opts.Ascending,
 		),
 		txn:    txn,
 		waitFn: waitFn,

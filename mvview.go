@@ -75,23 +75,23 @@ func (s *MVMemoryView) Delete(key Key) {
 }
 
 func (s *MVMemoryView) Iterator(start, end Key) storetypes.Iterator {
-	return s.iterator(start, end, true)
+	return s.iterator(IteratorOptions{Start: start, End: end, Ascending: true})
 }
 
 func (s *MVMemoryView) ReverseIterator(start, end Key) storetypes.Iterator {
-	return s.iterator(start, end, false)
+	return s.iterator(IteratorOptions{Start: start, End: end, Ascending: false})
 }
 
-func (s *MVMemoryView) iterator(start, end Key, ascending bool) storetypes.Iterator {
-	mvIter := s.mvMemory.Iterator(start, end, ascending, s.store, s.txn, s.waitFor)
+func (s *MVMemoryView) iterator(opts IteratorOptions) storetypes.Iterator {
+	mvIter := s.mvMemory.Iterator(opts, s.store, s.txn, s.waitFor)
 
 	var parentIter, wsIter storetypes.Iterator
-	if ascending {
-		wsIter = s.writeSet.Iterator(start, end)
-		parentIter = s.storage.Iterator(start, end)
+	if opts.Ascending {
+		wsIter = s.writeSet.Iterator(opts.Start, opts.End)
+		parentIter = s.storage.Iterator(opts.Start, opts.End)
 	} else {
-		wsIter = s.writeSet.ReverseIterator(start, end)
-		parentIter = s.storage.ReverseIterator(start, end)
+		wsIter = s.writeSet.ReverseIterator(opts.Start, opts.End)
+		parentIter = s.storage.ReverseIterator(opts.Start, opts.End)
 	}
 
 	onClose := func(iter storetypes.Iterator) {
@@ -102,29 +102,27 @@ func (s *MVMemoryView) iterator(start, end Key, ascending bool) storetypes.Itera
 			stopKey = iter.Key()
 
 			// if the iterator is not exhausted, the merge iterator may have read one more key which is not observed by
-			// caller, in that case we remove the last read descriptor.
+			// the caller, in that case we remove that read descriptor.
 			if len(reads) > 0 {
 				lastRead := reads[len(reads)-1].Key
-				if BytesBeyond(lastRead, stopKey, ascending) {
+				if BytesBeyond(lastRead, stopKey, opts.Ascending) {
 					reads = reads[:len(reads)-1]
 				}
 			}
 		}
 
-		s.readSet.Iterates = append(s.readSet.Iterates, IterationDescriptor{
-			Start:     start,
-			End:       end,
-			Ascending: ascending,
-			Stop:      stopKey,
-			Reads:     reads,
+		s.readSet.Iterators = append(s.readSet.Iterators, IteratorDescriptor{
+			IteratorOptions: opts,
+			Stop:            stopKey,
+			Reads:           reads,
 		})
 	}
 
 	// three-way merge iterator
 	return NewCacheMergeIterator(
-		NewCacheMergeIterator(parentIter, mvIter, ascending, nil),
+		NewCacheMergeIterator(parentIter, mvIter, opts.Ascending, nil),
 		wsIter,
-		ascending,
+		opts.Ascending,
 		onClose,
 	)
 }

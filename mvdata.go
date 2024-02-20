@@ -67,8 +67,8 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, bool) {
 }
 
 // ValidateIterator validates the iteration descriptor by replaying and compare the recorded reads.
-func (d *MVData) ValidateIterator(desc IterationDescriptor, txn TxnIndex) bool {
-	it := NewMVIterator(desc.Start, desc.End, desc.Ascending, txn, d.Iter(), nil)
+func (d *MVData) ValidateIterator(desc IteratorDescriptor, txn TxnIndex) bool {
+	it := NewMVIterator(desc.IteratorOptions, txn, d.Iter(), nil)
 	defer it.Close()
 
 	var i int

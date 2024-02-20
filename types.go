@@ -29,11 +29,17 @@ type ReadDescriptor struct {
 	Version TxnVersion
 }
 
-type IterationDescriptor struct {
-	// [Start, End) is the initial range of the iterator, an non-exhausted iteration has an effectively smaller range.
-	Start, End Key
-	Ascending  bool
+type IteratorOptions struct {
+	// [Start, End) is the range of the iterator
+	Start     Key
+	End       Key
+	Ascending bool
+}
+
+type IteratorDescriptor struct {
+	IteratorOptions
 	// Stop is not `nil` if the iteration is not exhausted and stops at a key before reaching the end of the range,
+	// the effective range is `[start, stop]`.
 	// when replaying, it should also stops at the stop key.
 	Stop Key
 	// Reads is the list of keys that is observed by the iterator.
@@ -41,8 +47,8 @@ type IterationDescriptor struct {
 }
 
 type ReadSet struct {
-	Reads    []ReadDescriptor
-	Iterates []IterationDescriptor
+	Reads     []ReadDescriptor
+	Iterators []IteratorDescriptor
 }
 
 type WriteSet = MemDB

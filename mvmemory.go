@@ -106,7 +106,7 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 			}
 		}
 
-		for _, desc := range readSet.Iterates {
+		for _, desc := range readSet.Iterators {
 			if !mv.data[store].ValidateIterator(desc, txn) {
 				return false
 			}
@@ -116,11 +116,10 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 }
 
 func (mv *MVMemory) Iterator(
-	start, end Key, ascending bool,
-	store int, txn TxnIndex,
+	opts IteratorOptions, store int, txn TxnIndex,
 	waitFn func(TxnIndex),
 ) *MVIterator {
-	return NewMVIterator(start, end, ascending, txn, mv.data[store].Iter(), waitFn)
+	return NewMVIterator(opts, txn, mv.data[store].Iter(), waitFn)
 }
 
 func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) MultiLocations {
