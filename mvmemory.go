@@ -93,20 +93,33 @@ func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 	// Invariant: at least one `Record` call has been made for `txn`
 	rs := *mv.lastReadSet[txn].Load()
 	for store, readSet := range rs {
-		for _, desc := range readSet {
-			_, version, estimate := mv.Read(store, desc.key, txn)
+		for _, desc := range readSet.Reads {
+			_, version, estimate := mv.Read(store, desc.Key, txn)
 			if estimate {
 				// previously read entry from data, now ESTIMATE
 				return false
 			}
-			if version != desc.version {
+			if version != desc.Version {
 				// previously read entry from data, now NOT_FOUND,
 				// or read some entry, but not the same version as before
 				return false
 			}
 		}
+
+		for _, desc := range readSet.Iterators {
+			if !mv.data[store].ValidateIterator(desc, txn) {
+				return false
+			}
+		}
 	}
 	return true
+}
+
+func (mv *MVMemory) Iterator(
+	opts IteratorOptions, store int, txn TxnIndex,
+	waitFn func(TxnIndex),
+) *MVIterator {
+	return NewMVIterator(opts, txn, mv.data[store].Iter(), waitFn)
 }
 
 func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) MultiLocations {

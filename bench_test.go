@@ -17,6 +17,7 @@ func BenchmarkBlockSTM(b *testing.B) {
 		{"random-10000/100", testBlock(10000, 100)},
 		{"no-conflict-10000", noConflictBlock(10000)},
 		{"worst-case-10000", worstCaseBlock(10000)},
+		{"iterate-10000/100", iterateBlock(10000, 100)},
 	}
 	for _, tc := range testCases {
 		b.Run(tc.name+"-sequential", func(b *testing.B) {

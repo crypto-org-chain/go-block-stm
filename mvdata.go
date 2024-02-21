@@ -9,7 +9,7 @@ type MVData struct {
 }
 
 func NewMVData() *MVData {
-	return &MVData{*NewBTree[dataItem](dataItemLess)}
+	return &MVData{*NewBTree[dataItem](KeyItemLess)}
 }
 
 // getTree returns `nil` if not found
@@ -58,12 +58,45 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, bool) {
 
 	// index order is reversed,
 	// find the closing txn that's less than the given txn
-	item, ok := tree.Seek(secondaryDataItem{Index: txn - 1})
+	item, ok := seekClosestTxn(tree, txn)
 	if !ok {
 		return nil, InvalidTxnVersion, false
 	}
 
 	return item.Value, item.Version(), item.Estimate
+}
+
+// ValidateIterator validates the iteration descriptor by replaying and compare the recorded reads.
+func (d *MVData) ValidateIterator(desc IteratorDescriptor, txn TxnIndex) bool {
+	it := NewMVIterator(desc.IteratorOptions, txn, d.Iter(), nil)
+	defer it.Close()
+
+	var i int
+	for ; it.Valid(); it.Next() {
+		if desc.Stop != nil {
+			if BytesBeyond(it.Key(), desc.Stop, desc.Ascending) {
+				break
+			}
+		}
+
+		if i >= len(desc.Reads) {
+			return false
+		}
+
+		read := desc.Reads[i]
+		if read.Version != it.Version() || !bytes.Equal(read.Key, it.Key()) {
+			return false
+		}
+
+		i++
+	}
+
+	// we read an estimate value, fail the validation.
+	if it.ReadEstimateValue() {
+		return false
+	}
+
+	return i == len(desc.Reads)
 }
 
 func (d *MVData) Snapshot() []KVPair {
@@ -97,8 +130,10 @@ type dataItem struct {
 	Tree *BTree[secondaryDataItem]
 }
 
-func dataItemLess(a, b dataItem) bool {
-	return bytes.Compare(a.Key, b.Key) < 0
+var _ KeyItem = dataItem{}
+
+func (item dataItem) GetKey() []byte {
+	return item.Key
 }
 
 type secondaryDataItem struct {
@@ -115,4 +150,10 @@ func secondaryDataItemLess(a, b secondaryDataItem) bool {
 
 func (item secondaryDataItem) Version() TxnVersion {
 	return TxnVersion{Index: item.Index, Incarnation: item.Incarnation}
+}
+
+// seekClosestTxn returns the closest txn that's less than the given txn.
+// NOTE: the tx index order is reversed.
+func seekClosestTxn(tree *BTree[secondaryDataItem], txn TxnIndex) (secondaryDataItem, bool) {
+	return tree.Seek(secondaryDataItem{Index: txn - 1})
 }

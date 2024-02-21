@@ -71,16 +71,23 @@ func (bt *BTree[T]) Scan(iter func(item T) bool) {
 	bt.Load().Scan(iter)
 }
 
-func (bt *BTree[T]) Min() (item T, ok bool) {
+func (bt *BTree[T]) Min() (T, bool) {
 	return bt.Load().Min()
 }
 
-func (bt *BTree[T]) Seek(item T) (T, bool) {
-	var empty T
-	iter := bt.Load().Iter()
+func (bt *BTree[T]) Iter() btree.IterG[T] {
+	return bt.Load().Iter()
+}
+
+func (bt *BTree[T]) Seek(item T) (result T, ok bool) {
+	iter := bt.Iter()
 	if !iter.Seek(item) {
-		return empty, false
+		iter.Release()
+		return
 	}
 
-	return iter.Item(), true
+	result = iter.Item()
+	ok = true
+	iter.Release()
+	return
 }

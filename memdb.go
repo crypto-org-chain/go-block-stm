@@ -3,6 +3,7 @@ package block_stm
 import (
 	"bytes"
 
+	storetypes "cosmossdk.io/store/types"
 	"github.com/tidwall/btree"
 )
 
@@ -11,8 +12,10 @@ type memdbItem struct {
 	value Value
 }
 
-func memdbItemLess(a, b memdbItem) bool {
-	return bytes.Compare(a.key, b.key) < 0
+var _ KeyItem = memdbItem{}
+
+func (item memdbItem) GetKey() []byte {
+	return item.key
 }
 
 type MemDB struct {
@@ -22,13 +25,13 @@ type MemDB struct {
 var _ KVStore = (*MemDB)(nil)
 
 func NewMemDB() *MemDB {
-	return &MemDB{*btree.NewBTreeG[memdbItem](memdbItemLess)}
+	return &MemDB{*btree.NewBTreeG[memdbItem](KeyItemLess)}
 }
 
 // NewMemDBNonConcurrent returns a new BTree which is not safe for concurrent
 // write operations by multiple goroutines.
 func NewMemDBNonConcurrent() *MemDB {
-	return &MemDB{*btree.NewBTreeGOptions[memdbItem](memdbItemLess, btree.Options{
+	return &MemDB{*btree.NewBTreeGOptions[memdbItem](KeyItemLess, btree.Options{
 		NoLocks: true,
 	})}
 }
@@ -75,6 +78,59 @@ func (db *MemDB) OverlayGet(key Key) (Value, bool) {
 // When used as an overlay (e.g. WriteSet), it stores the `nil` value to represent deleted keys,
 func (db *MemDB) OverlaySet(key Key, value Value) {
 	db.BTreeG.Set(memdbItem{key: key, value: value})
+}
+
+func (db *MemDB) Iterator(start, end Key) storetypes.Iterator {
+	return db.iterator(start, end, true)
+}
+
+func (db *MemDB) ReverseIterator(start, end Key) storetypes.Iterator {
+	return db.iterator(start, end, false)
+}
+
+func (db *MemDB) iterator(start, end Key, ascending bool) storetypes.Iterator {
+	return NewMemDBIterator(start, end, db.Iter(), ascending)
+}
+
+func (db *MemDB) Equal(other *MemDB) bool {
+	// compare with iterators
+	iter1 := db.Iterator(nil, nil)
+	iter2 := other.Iterator(nil, nil)
+	defer iter1.Close()
+	defer iter2.Close()
+
+	for {
+		if !iter1.Valid() && !iter2.Valid() {
+			return true
+		}
+		if !iter1.Valid() || !iter2.Valid() {
+			return false
+		}
+		if !bytes.Equal(iter1.Key(), iter2.Key()) || !bytes.Equal(iter1.Value(), iter2.Value()) {
+			return false
+		}
+		iter1.Next()
+		iter2.Next()
+	}
+}
+
+type MemDBIterator struct {
+	BTreeIteratorG[memdbItem]
+}
+
+var _ storetypes.Iterator = (*MemDBIterator)(nil)
+
+func NewMemDBIterator(start, end Key, iter btree.IterG[memdbItem], ascending bool) *MemDBIterator {
+	return &MemDBIterator{*NewBTreeIteratorG[memdbItem](
+		memdbItem{key: start},
+		memdbItem{key: end},
+		iter,
+		ascending,
+	)}
+}
+
+func (it *MemDBIterator) Value() []byte {
+	return it.Item().value
 }
 
 type MultiMemDB struct {
