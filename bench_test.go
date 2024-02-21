@@ -3,8 +3,6 @@ package block_stm
 import (
 	"strconv"
 	"testing"
-
-	"github.com/test-go/testify/require"
 )
 
 func BenchmarkBlockSTM(b *testing.B) {
@@ -12,7 +10,7 @@ func BenchmarkBlockSTM(b *testing.B) {
 	storage := NewMultiMemDB(stores)
 	testCases := []struct {
 		name  string
-		block []Tx
+		block *MockBlock
 	}{
 		{"random-10000/100", testBlock(10000, 100)},
 		{"no-conflict-10000", noConflictBlock(10000)},
@@ -30,15 +28,15 @@ func BenchmarkBlockSTM(b *testing.B) {
 			b.Run(tc.name+"-worker-"+strconv.Itoa(worker), func(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					require.NoError(b, ExecuteBlock(stores, storage, tc.block, worker))
+					ExecuteBlock(tc.block.Size(), stores, storage, tc.block.Execute, worker)
 				}
 			})
 		}
 	}
 }
 
-func runSequential(storage MultiStore, block []Tx) {
-	for _, tx := range block {
-		tx(storage)
+func runSequential(storage MultiStore, block *MockBlock) {
+	for i, tx := range block.Txs {
+		block.Results[i] = tx(storage)
 	}
 }

@@ -2,20 +2,29 @@ package block_stm
 
 type Executor struct {
 	i         int
+	blockSize int
+	stores    []string
 	scheduler *Scheduler
-	vm        *VM
+	storage   MultiStore
+	vm        VM
 	mvMemory  *MVMemory
 }
 
 func NewExecutor(
 	i int,
+	blockSize int,
+	stores []string,
 	scheduler *Scheduler,
-	vm *VM,
+	storage MultiStore,
+	vm VM,
 	mvMemory *MVMemory,
 ) *Executor {
 	return &Executor{
 		i:         i,
+		blockSize: blockSize,
+		stores:    stores,
 		scheduler: scheduler,
+		storage:   storage,
 		vm:        vm,
 		mvMemory:  mvMemory,
 	}
@@ -44,8 +53,8 @@ func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
 		return InvalidTxnVersion, 0
 	}
 	e.scheduler.executedTxns.Add(1)
-	result := e.vm.Execute(version.Index)
-	wroteNewLocation := e.mvMemory.Record(version, result.ReadSet, result.WriteSet)
+	readSet, writeSet := e.execute(version.Index)
+	wroteNewLocation := e.mvMemory.Record(version, readSet, writeSet)
 	return e.scheduler.FinishExecution(version, wroteNewLocation)
 }
 
@@ -54,8 +63,13 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 	valid := e.mvMemory.ValidateReadSet(version.Index)
 	aborted := !valid && e.scheduler.TryValidationAbort(version)
 	if aborted {
-		e.scheduler.abortedTxns.Add(1)
 		e.mvMemory.ConvertWritesToEstimates(version.Index)
 	}
 	return e.scheduler.FinishValidation(version.Index, aborted)
+}
+
+func (e *Executor) execute(txn TxnIndex) (MultiReadSet, MultiWriteSet) {
+	view := NewMultiMVMemoryView(e.stores, e.storage, e.mvMemory, e.scheduler, txn)
+	e.vm(txn, view)
+	return view.Result()
 }

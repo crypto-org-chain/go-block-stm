@@ -14,49 +14,49 @@ func accountName(i int64) string {
 	return fmt.Sprintf("account%05d", i)
 }
 
-func testBlock(size int, accounts int) []Tx {
-	blk := make([]Tx, size)
+func testBlock(size int, accounts int) *MockBlock {
+	txs := make([]Tx, size)
 	g := rand.New(rand.NewSource(0))
 	for i := 0; i < size; i++ {
 		sender := g.Int63n(int64(accounts))
 		receiver := g.Int63n(int64(accounts))
-		blk[i] = BankTransferTx(i, accountName(sender), accountName(receiver), 1)
+		txs[i] = BankTransferTx(i, accountName(sender), accountName(receiver), 1)
 	}
-	return blk
+	return NewMockBlock(txs)
 }
 
-func iterateBlock(size int, accounts int) []Tx {
-	blk := make([]Tx, size)
+func iterateBlock(size int, accounts int) *MockBlock {
+	txs := make([]Tx, size)
 	g := rand.New(rand.NewSource(0))
 	for i := 0; i < size; i++ {
 		sender := g.Int63n(int64(accounts))
 		receiver := g.Int63n(int64(accounts))
-		blk[i] = IterateTx(i, accountName(sender), accountName(receiver), 1)
+		txs[i] = IterateTx(i, accountName(sender), accountName(receiver), 1)
 	}
-	return blk
+	return NewMockBlock(txs)
 }
 
-func noConflictBlock(size int) []Tx {
-	blk := make([]Tx, size)
+func noConflictBlock(size int) *MockBlock {
+	txs := make([]Tx, size)
 	for i := 0; i < size; i++ {
 		sender := accountName(int64(i))
-		blk[i] = BankTransferTx(i, sender, sender, 1)
+		txs[i] = BankTransferTx(i, sender, sender, 1)
 	}
-	return blk
+	return NewMockBlock(txs)
 }
 
-func worstCaseBlock(size int) []Tx {
-	blk := make([]Tx, size)
+func worstCaseBlock(size int) *MockBlock {
+	txs := make([]Tx, size)
 	for i := 0; i < size; i++ {
 		// all transactions are from the same account
 		sender := "account0"
-		blk[i] = BankTransferTx(i, sender, sender, 1)
+		txs[i] = BankTransferTx(i, sender, sender, 1)
 	}
-	return blk
+	return NewMockBlock(txs)
 }
 
-func determisticBlock() []Tx {
-	return []Tx{
+func determisticBlock() *MockBlock {
+	return NewMockBlock([]Tx{
 		NoopTx(0, "account0"),
 		NoopTx(1, "account1"),
 		NoopTx(2, "account1"),
@@ -66,14 +66,14 @@ func determisticBlock() []Tx {
 		NoopTx(6, "account4"),
 		NoopTx(7, "account5"),
 		NoopTx(8, "account6"),
-	}
+	})
 }
 
 func TestSTM(t *testing.T) {
 	stores := []string{"acc", "bank"}
 	testCases := []struct {
 		name      string
-		blk       []Tx
+		blk       *MockBlock
 		executors int
 	}{
 		{
@@ -116,7 +116,10 @@ func TestSTM(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			storage := NewMultiMemDB(stores)
-			require.NoError(t, ExecuteBlock(stores, storage, tc.blk, tc.executors))
+			ExecuteBlock(tc.blk.Size(), stores, storage, tc.blk.Execute, tc.executors)
+			for _, err := range tc.blk.Results {
+				require.NoError(t, err)
+			}
 
 			crossCheck := NewMultiMemDB(stores)
 			runSequential(crossCheck, tc.blk)
@@ -135,7 +138,7 @@ func TestSTM(t *testing.T) {
 				total += binary.BigEndian.Uint64(v)
 				return true
 			})
-			require.Equal(t, uint64(len(tc.blk)), total)
+			require.Equal(t, uint64(tc.blk.Size()), total)
 		})
 	}
 }

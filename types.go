@@ -1,6 +1,10 @@
 package block_stm
 
-import "bytes"
+import (
+	"bytes"
+
+	storetypes "cosmossdk.io/store/types"
+)
 
 type (
 	TxnIndex    int
@@ -68,4 +72,22 @@ type KeyItem interface {
 
 func KeyItemLess[T KeyItem](a, b T) bool {
 	return bytes.Compare(a.GetKey(), b.GetKey()) < 0
+}
+
+// VM executes transactions on top of a multi-version memory view.
+type VM func(TxnIndex, MultiStore)
+
+type KVStore interface {
+	Get(Key) Value
+	Has(Key) bool
+	// nil value is not allowed in `Set`
+	Set(Key, Value)
+	Delete(Key)
+
+	Iterator(start, end Key) storetypes.Iterator
+	ReverseIterator(start, end Key) storetypes.Iterator
+}
+
+type MultiStore interface {
+	GetKVStore(string) KVStore
 }

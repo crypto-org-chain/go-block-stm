@@ -1,33 +1,36 @@
 package block_stm
 
 type MultiMVMemoryView struct {
-	storeIndices map[string]int
-	views        []MVMemoryView
+	stores []string
+	views  map[string]*MVMemoryView
 }
 
 var _ MultiStore = (*MultiMVMemoryView)(nil)
 
-func NewMultiMVMemoryView(stores []string, storage MultiStore, mvMemory *MVMemory, schedule *Scheduler, txn TxnIndex) *MultiMVMemoryView {
-	views := make([]MVMemoryView, len(stores))
-	storeIndices := make(map[string]int, len(stores))
+func NewMultiMVMemoryView(
+	stores []string, storage MultiStore,
+	mvMemory *MVMemory, schedule *Scheduler,
+	txn TxnIndex,
+) *MultiMVMemoryView {
+	views := make(map[string]*MVMemoryView, len(stores))
 	for i, name := range stores {
-		storeIndices[name] = i
-		views[i] = *NewMVMemoryView(i, storage.GetKVStore(name), mvMemory, schedule, txn)
+		views[name] = NewMVMemoryView(i, storage.GetKVStore(name), mvMemory, schedule, txn)
 	}
 	return &MultiMVMemoryView{
-		storeIndices: storeIndices,
-		views:        views,
+		stores: stores,
+		views:  views,
 	}
 }
 
 func (mv *MultiMVMemoryView) GetKVStore(name string) KVStore {
-	return &mv.views[mv.storeIndices[name]]
+	return mv.views[name]
 }
 
 func (s *MultiMVMemoryView) Result() (MultiReadSet, MultiWriteSet) {
 	rs := make(MultiReadSet, len(s.views))
 	ws := make(MultiWriteSet, len(s.views))
-	for i, view := range s.views {
+	for i, name := range s.stores {
+		view := s.views[name]
 		rs[i] = view.readSet
 		ws[i] = view.writeSet
 	}

@@ -51,8 +51,6 @@ type Scheduler struct {
 	// metrics
 	executedTxns  atomic.Int64
 	validatedTxns atomic.Int64
-	abortedTxns   atomic.Int64
-	readErrTxns   atomic.Int64
 }
 
 func NewScheduler(block_size int) *Scheduler {
@@ -222,6 +220,6 @@ func (s *Scheduler) TryNotify(txn TxnIndex) bool {
 }
 
 func (s *Scheduler) Stats() string {
-	return fmt.Sprintf("executed: %d, validated: %d, aborted: %d, readErr: %d",
-		s.executedTxns.Load(), s.validatedTxns.Load(), s.abortedTxns.Load(), s.readErrTxns.Load())
+	return fmt.Sprintf("executed: %d, validated: %d",
+		s.executedTxns.Load(), s.validatedTxns.Load())
 }

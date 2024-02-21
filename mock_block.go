@@ -10,6 +10,28 @@ import (
 	"github.com/cometbft/cometbft/crypto/secp256k1"
 )
 
+type Tx func(MultiStore) error
+
+type MockBlock struct {
+	Txs     []Tx
+	Results []error
+}
+
+func NewMockBlock(txs []Tx) *MockBlock {
+	return &MockBlock{
+		Txs:     txs,
+		Results: make([]error, len(txs)),
+	}
+}
+
+func (b *MockBlock) Size() int {
+	return len(b.Txs)
+}
+
+func (b *MockBlock) Execute(txn TxnIndex, store MultiStore) {
+	b.Results[txn] = b.Txs[txn](store)
+}
+
 // Simulated transaction logic for tests and benchmarks
 
 // NoopTx verifies a signature and increases the nonce of the sender
