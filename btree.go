@@ -71,6 +71,18 @@ func (bt *BTree[T]) Scan(iter func(item T) bool) {
 	bt.Load().Scan(iter)
 }
 
+func (bt *BTree[T]) LoadItem(item T) (prev T, ok bool) {
+	for {
+		t := bt.Load()
+		c := t.Copy()
+		prev, ok = c.Load(item)
+		c.Freeze()
+		if bt.CompareAndSwap(t, c) {
+			return
+		}
+	}
+}
+
 func (bt *BTree[T]) Min() (T, bool) {
 	return bt.Load().Min()
 }
