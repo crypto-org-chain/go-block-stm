@@ -6,7 +6,7 @@ type Executor struct {
 	stores    []string
 	scheduler *Scheduler
 	storage   MultiStore
-	vm        VM
+	executeFn ExecuteFn
 	mvMemory  *MVMemory
 }
 
@@ -16,7 +16,7 @@ func NewExecutor(
 	stores []string,
 	scheduler *Scheduler,
 	storage MultiStore,
-	vm VM,
+	executeFn ExecuteFn,
 	mvMemory *MVMemory,
 ) *Executor {
 	return &Executor{
@@ -25,7 +25,7 @@ func NewExecutor(
 		stores:    stores,
 		scheduler: scheduler,
 		storage:   storage,
-		vm:        vm,
+		executeFn: executeFn,
 		mvMemory:  mvMemory,
 	}
 }
@@ -70,6 +70,6 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 
 func (e *Executor) execute(txn TxnIndex) (MultiReadSet, MultiWriteSet) {
 	view := NewMultiMVMemoryView(e.stores, e.storage, e.mvMemory, e.scheduler, txn)
-	e.vm(txn, view)
+	e.executeFn(txn, view)
 	return view.Result()
 }

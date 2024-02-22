@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-func ExecuteBlock(blockSize int, stores []string, storage MultiStore, vm VM, executors int) {
+func ExecuteBlock(blockSize int, stores []string, storage MultiStore, executeFn ExecuteFn, executors int) {
 	// Create a new scheduler
 	scheduler := NewScheduler(blockSize)
 	mvMemory := NewMVMemory(blockSize, stores)
@@ -15,7 +15,7 @@ func ExecuteBlock(blockSize int, stores []string, storage MultiStore, vm VM, exe
 		i := i
 		go func() {
 			defer wg.Done()
-			NewExecutor(i, blockSize, stores, scheduler, storage, vm, mvMemory).Run()
+			NewExecutor(i, blockSize, stores, scheduler, storage, executeFn, mvMemory).Run()
 		}()
 	}
 	wg.Wait()
