@@ -146,6 +146,20 @@ func TestBTree(t *testing.T) {
 	}
 }
 
+func TestClear(t *testing.T) {
+	tr := NewBTree(intLess)
+	for i := 0; i < 100; i++ {
+		tr.Set(i)
+	}
+	assert(tr.Len() == 100)
+	tr.Clear()
+	assert(tr.Len() == 0)
+	for i := 0; i < 100; i++ {
+		tr.Set(i)
+	}
+	assert(tr.Len() == 100)
+}
+
 func TestSeek(t *testing.T) {
 	N := 100_000
 	lt := func(a, b interface{}) bool { return a.(int) < b.(int) }

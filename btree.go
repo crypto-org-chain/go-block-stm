@@ -114,6 +114,19 @@ func (bt *BTree[T]) Copy() *BTree[T] {
 	return t
 }
 
+// Clear will delete all items.
+func (bt *BTree[T]) Clear() {
+	for {
+		t := bt.Load()
+		c := t.Copy()
+		c.Clear()
+		c.Freeze()
+		if bt.CompareAndSwap(t, c) {
+			return
+		}
+	}
+}
+
 func (bt *BTree[T]) Scan(iter func(item T) bool) {
 	bt.Load().Scan(iter)
 }
