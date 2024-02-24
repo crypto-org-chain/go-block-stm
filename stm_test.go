@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
+	storetypes "cosmossdk.io/store/types"
 	"github.com/test-go/testify/require"
 )
 
@@ -70,7 +71,7 @@ func determisticBlock() *MockBlock {
 }
 
 func TestSTM(t *testing.T) {
-	stores := []string{"acc", "bank"}
+	stores := []storetypes.StoreKey{StoreKeyAuth, StoreKeyBank}
 	testCases := []struct {
 		name      string
 		blk       *MockBlock
@@ -116,7 +117,7 @@ func TestSTM(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			storage := NewMultiMemDB(stores)
-			ExecuteBlock(tc.blk.Size(), stores, storage, tc.blk.Execute, tc.executors)
+			ExecuteBlock(tc.blk.Size(), stores, storage, tc.executors, tc.blk.Execute)
 			for _, err := range tc.blk.Results {
 				require.NoError(t, err)
 			}
@@ -131,7 +132,7 @@ func TestSTM(t *testing.T) {
 
 			// check total nonce increased the same amount as the number of transactions
 			var total uint64
-			storage.GetDB("acc").Scan(func(k Key, v Value) bool {
+			storage.GetDB(StoreKeyAuth).Scan(func(k Key, v Value) bool {
 				if !bytes.HasPrefix(k, []byte("nonce")) {
 					return true
 				}

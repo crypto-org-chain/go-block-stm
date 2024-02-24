@@ -7,7 +7,13 @@ import (
 
 	cryptorand "crypto/rand"
 
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cometbft/cometbft/crypto/secp256k1"
+)
+
+var (
+	StoreKeyAuth = storetypes.NewKVStoreKey("acc")
+	StoreKeyBank = storetypes.NewKVStoreKey("bank")
 )
 
 type Tx func(MultiStore) error
@@ -39,7 +45,7 @@ func NoopTx(i int, sender string) Tx {
 	verifySig := genRandomSignature()
 	return func(store MultiStore) error {
 		verifySig()
-		return increaseNonce(i, sender, store.GetKVStore("acc"))
+		return increaseNonce(i, sender, store.GetKVStore(StoreKeyAuth))
 	}
 }
 
@@ -50,7 +56,7 @@ func BankTransferTx(i int, sender, receiver string, amount uint64) Tx {
 			return err
 		}
 
-		return bankTransfer(i, sender, receiver, amount, store.GetKVStore("bank"))
+		return bankTransfer(i, sender, receiver, amount, store.GetKVStore(StoreKeyBank))
 	}
 }
 
@@ -62,7 +68,7 @@ func IterateTx(i int, sender, receiver string, amount uint64) Tx {
 		}
 
 		// find a nearby account, do a bank transfer
-		accStore := store.GetKVStore("acc")
+		accStore := store.GetKVStore(StoreKeyAuth)
 
 		{
 			it := accStore.Iterator([]byte("nonce"+sender), nil)
@@ -73,7 +79,7 @@ func IterateTx(i int, sender, receiver string, amount uint64) Tx {
 				j++
 				if j > 5 {
 					recipient := strings.TrimPrefix(string(it.Key()), "nonce")
-					return bankTransfer(i, sender, recipient, amount, store.GetKVStore("bank"))
+					return bankTransfer(i, sender, recipient, amount, store.GetKVStore(StoreKeyBank))
 				}
 			}
 		}
@@ -87,7 +93,7 @@ func IterateTx(i int, sender, receiver string, amount uint64) Tx {
 				j++
 				if j > 5 {
 					recipient := strings.TrimPrefix(string(it.Key()), "nonce")
-					return bankTransfer(i, sender, recipient, amount, store.GetKVStore("bank"))
+					return bankTransfer(i, sender, recipient, amount, store.GetKVStore(StoreKeyBank))
 				}
 			}
 		}

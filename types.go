@@ -78,16 +78,11 @@ func KeyItemLess[T KeyItem](a, b T) bool {
 type ExecuteFn func(TxnIndex, MultiStore)
 
 type KVStore interface {
-	Get(Key) Value
-	Has(Key) bool
-	// nil value is not allowed in `Set`
-	Set(Key, Value)
-	Delete(Key)
-
-	Iterator(start, end Key) storetypes.Iterator
-	ReverseIterator(start, end Key) storetypes.Iterator
+	storetypes.BasicKVStore
+	Iterator(start, end []byte) storetypes.Iterator
+	ReverseIterator(start, end []byte) storetypes.Iterator
 }
 
 type MultiStore interface {
-	GetKVStore(string) KVStore
+	GetKVStore(storetypes.StoreKey) KVStore
 }

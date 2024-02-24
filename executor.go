@@ -1,9 +1,11 @@
 package block_stm
 
+import storetypes "cosmossdk.io/store/types"
+
 type Executor struct {
 	i         int
 	blockSize int
-	stores    []string
+	stores    []storetypes.StoreKey
 	scheduler *Scheduler
 	storage   MultiStore
 	executeFn ExecuteFn
@@ -13,7 +15,7 @@ type Executor struct {
 func NewExecutor(
 	i int,
 	blockSize int,
-	stores []string,
+	stores []storetypes.StoreKey,
 	scheduler *Scheduler,
 	storage MultiStore,
 	executeFn ExecuteFn,

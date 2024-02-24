@@ -134,11 +134,11 @@ func (it *MemDBIterator) Value() []byte {
 }
 
 type MultiMemDB struct {
-	dbs map[string]*MemDB
+	dbs map[storetypes.StoreKey]*MemDB
 }
 
-func NewMultiMemDB(stores []string) *MultiMemDB {
-	dbs := make(map[string]*MemDB, len(stores))
+func NewMultiMemDB(stores []storetypes.StoreKey) *MultiMemDB {
+	dbs := make(map[storetypes.StoreKey]*MemDB, len(stores))
 	for _, name := range stores {
 		dbs[name] = NewMemDB()
 	}
@@ -147,10 +147,10 @@ func NewMultiMemDB(stores []string) *MultiMemDB {
 	}
 }
 
-func (mmdb *MultiMemDB) GetDB(store string) *MemDB {
+func (mmdb *MultiMemDB) GetDB(store storetypes.StoreKey) *MemDB {
 	return mmdb.dbs[store]
 }
 
-func (mmdb *MultiMemDB) GetKVStore(store string) KVStore {
+func (mmdb *MultiMemDB) GetKVStore(store storetypes.StoreKey) KVStore {
 	return mmdb.GetDB(store)
 }

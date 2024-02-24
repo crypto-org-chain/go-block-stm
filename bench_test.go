@@ -3,10 +3,12 @@ package block_stm
 import (
 	"strconv"
 	"testing"
+
+	storetypes "cosmossdk.io/store/types"
 )
 
 func BenchmarkBlockSTM(b *testing.B) {
-	stores := []string{"acc", "bank"}
+	stores := []storetypes.StoreKey{StoreKeyAuth, StoreKeyBank}
 	storage := NewMultiMemDB(stores)
 	testCases := []struct {
 		name  string
@@ -28,7 +30,7 @@ func BenchmarkBlockSTM(b *testing.B) {
 			b.Run(tc.name+"-worker-"+strconv.Itoa(worker), func(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					ExecuteBlock(tc.block.Size(), stores, storage, tc.block.Execute, worker)
+					ExecuteBlock(tc.block.Size(), stores, storage, worker, tc.block.Execute)
 				}
 			})
 		}

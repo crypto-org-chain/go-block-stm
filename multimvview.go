@@ -1,18 +1,21 @@
 package block_stm
 
+import storetypes "cosmossdk.io/store/types"
+
 type MultiMVMemoryView struct {
-	stores []string
-	views  map[string]*MVMemoryView
+	stores []storetypes.StoreKey
+	views  map[storetypes.StoreKey]*MVMemoryView
 }
 
 var _ MultiStore = (*MultiMVMemoryView)(nil)
 
 func NewMultiMVMemoryView(
-	stores []string, storage MultiStore,
+	stores []storetypes.StoreKey,
+	storage MultiStore,
 	mvMemory *MVMemory, schedule *Scheduler,
 	txn TxnIndex,
 ) *MultiMVMemoryView {
-	views := make(map[string]*MVMemoryView, len(stores))
+	views := make(map[storetypes.StoreKey]*MVMemoryView, len(stores))
 	for i, name := range stores {
 		views[name] = NewMVMemoryView(i, storage.GetKVStore(name), mvMemory, schedule, txn)
 	}
@@ -22,7 +25,7 @@ func NewMultiMVMemoryView(
 	}
 }
 
-func (mv *MultiMVMemoryView) GetKVStore(name string) KVStore {
+func (mv *MultiMVMemoryView) GetKVStore(name storetypes.StoreKey) KVStore {
 	return mv.views[name]
 }
 

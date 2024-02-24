@@ -3,6 +3,7 @@ package block_stm
 import (
 	"testing"
 
+	storetypes "cosmossdk.io/store/types"
 	"github.com/test-go/testify/require"
 )
 
@@ -15,7 +16,7 @@ func BuildWriteSet(pairs ...KVPair) WriteSet {
 }
 
 func TestMVMemoryRecord(t *testing.T) {
-	stores := []string{"acc"}
+	stores := []storetypes.StoreKey{StoreKeyAuth}
 	mv := NewMVMemory(16, stores)
 
 	for i := TxnIndex(0); i < 3; i++ {

@@ -1,6 +1,10 @@
 package block_stm
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+
+	storetypes "cosmossdk.io/store/types"
+)
 
 type (
 	// keys are sorted
@@ -10,13 +14,13 @@ type (
 
 // MVMemory implements `Algorithm 2 The MVMemory module`
 type MVMemory struct {
-	stores               []string
+	stores               []storetypes.StoreKey
 	data                 []MVData
 	lastWrittenLocations []atomic.Pointer[MultiLocations]
 	lastReadSet          []atomic.Pointer[MultiReadSet]
 }
 
-func NewMVMemory(block_size int, stores []string) *MVMemory {
+func NewMVMemory(block_size int, stores []storetypes.StoreKey) *MVMemory {
 	data := make([]MVData, len(stores))
 	for i := 0; i < len(stores); i++ {
 		data[i] = *NewMVData()
