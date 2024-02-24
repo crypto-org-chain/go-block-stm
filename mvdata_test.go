@@ -104,8 +104,8 @@ func TestSnapshot(t *testing.T) {
 	}, data.Snapshot())
 
 	WriteSnapshot(storage, data.Snapshot())
-	require.Equal(t, Value([]byte("3")), storage.Get([]byte("a")))
-	require.Equal(t, Value([]byte("2")), storage.Get([]byte("b")))
-	require.Equal(t, Value(nil), storage.Get([]byte("d")))
+	require.Equal(t, []byte("3"), storage.Get([]byte("a")))
+	require.Equal(t, []byte("2"), storage.Get([]byte("b")))
+	require.Nil(t, storage.Get([]byte("d")))
 	require.Equal(t, 2, storage.Len())
 }

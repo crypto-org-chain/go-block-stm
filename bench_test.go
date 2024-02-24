@@ -1,6 +1,7 @@
 package block_stm
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
@@ -30,7 +31,7 @@ func BenchmarkBlockSTM(b *testing.B) {
 			b.Run(tc.name+"-worker-"+strconv.Itoa(worker), func(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					ExecuteBlock(tc.block.Size(), stores, storage, worker, tc.block.Execute)
+					ExecuteBlock(context.Background(), tc.block.Size(), stores, storage, worker, tc.block.Execute)
 				}
 			})
 		}

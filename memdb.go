@@ -42,7 +42,7 @@ func (db *MemDB) Scan(cb func(key Key, value Value) bool) {
 	})
 }
 
-func (db *MemDB) Get(key Key) Value {
+func (db *MemDB) Get(key []byte) []byte {
 	item, ok := db.BTreeG.Get(memdbItem{key: key})
 	if !ok {
 		return nil
@@ -50,18 +50,18 @@ func (db *MemDB) Get(key Key) Value {
 	return item.value
 }
 
-func (db *MemDB) Has(key Key) bool {
+func (db *MemDB) Has(key []byte) bool {
 	return db.Get(key) != nil
 }
 
-func (db *MemDB) Set(key Key, value Value) {
+func (db *MemDB) Set(key, value []byte) {
 	if value == nil {
 		panic("nil value not allowed")
 	}
 	db.BTreeG.Set(memdbItem{key: key, value: value})
 }
 
-func (db *MemDB) Delete(key Key) {
+func (db *MemDB) Delete(key []byte) {
 	db.BTreeG.Delete(memdbItem{key: key})
 }
 
@@ -80,11 +80,11 @@ func (db *MemDB) OverlaySet(key Key, value Value) {
 	db.BTreeG.Set(memdbItem{key: key, value: value})
 }
 
-func (db *MemDB) Iterator(start, end Key) storetypes.Iterator {
+func (db *MemDB) Iterator(start, end []byte) storetypes.Iterator {
 	return db.iterator(start, end, true)
 }
 
-func (db *MemDB) ReverseIterator(start, end Key) storetypes.Iterator {
+func (db *MemDB) ReverseIterator(start, end []byte) storetypes.Iterator {
 	return db.iterator(start, end, false)
 }
 

@@ -1,6 +1,10 @@
 package block_stm
 
-import storetypes "cosmossdk.io/store/types"
+import (
+	"context"
+
+	storetypes "cosmossdk.io/store/types"
+)
 
 type Executor struct {
 	i         int
@@ -32,7 +36,7 @@ func NewExecutor(
 	}
 }
 
-func (e *Executor) Run() {
+func (e *Executor) Run(ctx context.Context) error {
 	var kind TaskKind
 	version := InvalidTxnVersion
 	for !e.scheduler.Done() {
@@ -40,13 +44,22 @@ func (e *Executor) Run() {
 			version, kind = e.scheduler.NextTask()
 			continue
 		}
+
 		switch kind {
 		case TaskKindExecution:
 			version, kind = e.TryExecute(version)
 		case TaskKindValidation:
 			version, kind = e.NeedsReexecution(version)
 		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// continue
+		}
 	}
+	return nil
 }
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {

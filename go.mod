@@ -7,6 +7,7 @@ require (
 	github.com/cometbft/cometbft v0.38.2
 	github.com/test-go/testify v1.1.4
 	github.com/tidwall/btree v1.7.0
+	golang.org/x/sync v0.4.0
 )
 
 require (

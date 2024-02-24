@@ -34,7 +34,7 @@ func (s *MVMemoryView) waitFor(txn TxnIndex) {
 	}
 }
 
-func (s *MVMemoryView) Get(key Key) Value {
+func (s *MVMemoryView) Get(key []byte) []byte {
 	if value, found := s.writeSet.OverlayGet(key); found {
 		// value written by this txn
 		// nil value means deleted
@@ -59,26 +59,26 @@ func (s *MVMemoryView) Get(key Key) Value {
 	}
 }
 
-func (s *MVMemoryView) Has(key Key) bool {
+func (s *MVMemoryView) Has(key []byte) bool {
 	return s.Get(key) != nil
 }
 
-func (s *MVMemoryView) Set(key Key, value Value) {
+func (s *MVMemoryView) Set(key, value []byte) {
 	if value == nil {
 		panic("nil value is not allowed")
 	}
 	s.writeSet.OverlaySet(key, value)
 }
 
-func (s *MVMemoryView) Delete(key Key) {
+func (s *MVMemoryView) Delete(key []byte) {
 	s.writeSet.OverlaySet(key, nil)
 }
 
-func (s *MVMemoryView) Iterator(start, end Key) storetypes.Iterator {
+func (s *MVMemoryView) Iterator(start, end []byte) storetypes.Iterator {
 	return s.iterator(IteratorOptions{Start: start, End: end, Ascending: true})
 }
 
-func (s *MVMemoryView) ReverseIterator(start, end Key) storetypes.Iterator {
+func (s *MVMemoryView) ReverseIterator(start, end []byte) storetypes.Iterator {
 	return s.iterator(IteratorOptions{Start: start, End: end, Ascending: false})
 }
 
