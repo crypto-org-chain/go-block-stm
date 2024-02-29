@@ -1,6 +1,6 @@
 `go-block-stm` implements the [block-stm algorithm](https://arxiv.org/abs/2203.06871), it follows the paper pseudocode pretty closely.
 
-Main derivations from the paper are:
+The main deviations from the paper are:
 
 ### Optimisation
 
