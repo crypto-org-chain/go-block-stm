@@ -1,5 +1,19 @@
 `go-block-stm` implements the [block-stm algorithm](https://arxiv.org/abs/2203.06871), it follows the paper pseudocode pretty closely.
 
+The main API is a simple function call [ExecuteBlock](https://github.com/yihuang/go-block-stm/blob/main/stm.go#L10):
+
+```golang
+type ExecuteFn func(TxnIndex, MultiStore)
+func ExecuteBlock(
+	ctx context.Context,           // context for cancellation
+	blockSize int,                 // the number of the transactions to be executed
+	stores []storetypes.StoreKey,  // the list of store keys to support
+	storage MultiStore,            // the parent storage, after all transactions are executed, the whole change sets are written into parent storage at once
+	executors int,                 // how many concurrent executors to spawn
+	executeFn ExecuteFn,           // callback function to actually execute a transaction with a wrapped `MultiStore`.
+) error
+```
+
 The main deviations from the paper are:
 
 ### Optimisation
