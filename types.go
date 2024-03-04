@@ -74,8 +74,8 @@ func KeyItemLess[T KeyItem](a, b T) bool {
 	return bytes.Compare(a.GetKey(), b.GetKey()) < 0
 }
 
-// ExecuteFn executes transactions on top of a multi-version memory view.
-type ExecuteFn func(TxnIndex, MultiStore)
+// TxExecutor executes transactions on top of a multi-version memory view.
+type TxExecutor func(TxnIndex, MultiStore)
 
 type KVStore interface {
 	storetypes.BasicKVStore

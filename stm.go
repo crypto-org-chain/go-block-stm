@@ -2,9 +2,10 @@ package block_stm
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	storetypes "cosmossdk.io/store/types"
-	"golang.org/x/sync/errgroup"
 )
 
 func ExecuteBlock(
@@ -13,22 +14,30 @@ func ExecuteBlock(
 	stores []storetypes.StoreKey,
 	storage MultiStore,
 	executors int,
-	executeFn ExecuteFn,
+	txExecutor TxExecutor,
 ) error {
 	// Create a new scheduler
 	scheduler := NewScheduler(blockSize)
 	mvMemory := NewMVMemory(blockSize, stores)
 
-	var eg errgroup.Group
+	var wg sync.WaitGroup
+	wg.Add(executors)
 	for i := 0; i < executors; i++ {
-		i := i
-		eg.Go(func() error {
-			return NewExecutor(i, blockSize, stores, scheduler, storage, executeFn, mvMemory).Run(ctx)
-		})
+		e := NewExecutor(ctx, blockSize, stores, scheduler, storage, txExecutor, mvMemory, i)
+		go func() {
+			defer wg.Done()
+			e.Run()
+		}()
 	}
+	wg.Wait()
 
-	if err := eg.Wait(); err != nil {
-		return err
+	if !scheduler.Done() {
+		if ctx.Err() != nil {
+			// cancelled
+			return ctx.Err()
+		}
+
+		return errors.New("scheduler did not complete")
 	}
 
 	// Write the snapshot into the storage

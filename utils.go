@@ -27,12 +27,19 @@ func StoreMin(a *atomic.Uint64, b uint64) {
 	}
 }
 
-func DecreaseAtomic(a *atomic.Uint64) {
+// DecrAtomic decreases the atomic value by 1
+func DecrAtomic(a *atomic.Uint64) {
 	a.Add(^uint64(0))
 }
 
-func IncreaseAtomic(a *atomic.Uint64) {
+// IncrAtomic increases the atomic value by 1
+func IncrAtomic(a *atomic.Uint64) {
 	a.Add(1)
+}
+
+// FetchIncr increaes the atomic value by 1 and returns the old value
+func FetchIncr(a *atomic.Uint64) uint64 {
+	return a.Add(1) - 1
 }
 
 // callback arguments: (value, is_new)

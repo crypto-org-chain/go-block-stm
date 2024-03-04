@@ -34,7 +34,7 @@ func (b *MockBlock) Size() int {
 	return len(b.Txs)
 }
 
-func (b *MockBlock) Execute(txn TxnIndex, store MultiStore) {
+func (b *MockBlock) ExecuteTx(txn TxnIndex, store MultiStore) {
 	b.Results[txn] = b.Txs[txn](store)
 }
 

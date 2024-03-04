@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	storetypes "cosmossdk.io/store/types"
+	"github.com/test-go/testify/require"
 )
 
 func BenchmarkBlockSTM(b *testing.B) {
@@ -31,7 +32,10 @@ func BenchmarkBlockSTM(b *testing.B) {
 			b.Run(tc.name+"-worker-"+strconv.Itoa(worker), func(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					ExecuteBlock(context.Background(), tc.block.Size(), stores, storage, worker, tc.block.Execute)
+					require.NoError(
+						b,
+						ExecuteBlock(context.Background(), tc.block.Size(), stores, storage, worker, tc.block.ExecuteTx),
+					)
 				}
 			})
 		}

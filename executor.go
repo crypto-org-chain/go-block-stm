@@ -6,41 +6,58 @@ import (
 	storetypes "cosmossdk.io/store/types"
 )
 
+// Executor fields are not mutated during execution.
 type Executor struct {
-	i         int
-	blockSize int
-	stores    []storetypes.StoreKey
-	scheduler *Scheduler
-	storage   MultiStore
-	executeFn ExecuteFn
-	mvMemory  *MVMemory
+	ctx        context.Context       // context for cancellation
+	blockSize  int                   // total number of transactions to execute
+	stores     []storetypes.StoreKey // store names
+	scheduler  *Scheduler            // scheduler for task management
+	storage    MultiStore            // storage for the executor
+	txExecutor TxExecutor            // callback to actually execute a transaction
+	mvMemory   *MVMemory             // multi-version memory for the executor
+
+	// index of the executor, used for debugging output
+	i int
 }
 
 func NewExecutor(
-	i int,
+	ctx context.Context,
 	blockSize int,
 	stores []storetypes.StoreKey,
 	scheduler *Scheduler,
 	storage MultiStore,
-	executeFn ExecuteFn,
+	txExecutor TxExecutor,
 	mvMemory *MVMemory,
+	i int,
 ) *Executor {
 	return &Executor{
-		i:         i,
-		blockSize: blockSize,
-		stores:    stores,
-		scheduler: scheduler,
-		storage:   storage,
-		executeFn: executeFn,
-		mvMemory:  mvMemory,
+		ctx:        ctx,
+		blockSize:  blockSize,
+		stores:     stores,
+		scheduler:  scheduler,
+		storage:    storage,
+		txExecutor: txExecutor,
+		mvMemory:   mvMemory,
+		i:          i,
 	}
 }
 
-func (e *Executor) Run(ctx context.Context) error {
+// Invariant `num_active_tasks`:
+//   - `NextTask` increases it if returns a valid task.
+//   - `TryExecute` and `NeedsReexecution` don't change it if it returns a new valid task to run,
+//     otherwise it decreases it.
+func (e *Executor) Run() {
 	var kind TaskKind
 	version := InvalidTxnVersion
 	for !e.scheduler.Done() {
 		if !version.Valid() {
+			// check for cancellation
+			select {
+			case <-e.ctx.Done():
+				return
+			default:
+			}
+
 			version, kind = e.scheduler.NextTask()
 			continue
 		}
@@ -51,22 +68,10 @@ func (e *Executor) Run(ctx context.Context) error {
 		case TaskKindValidation:
 			version, kind = e.NeedsReexecution(version)
 		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			// continue
-		}
 	}
-	return nil
 }
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
-	if e.scheduler.TryNotify(version.Index) {
-		// resumed a suspended transaction
-		return InvalidTxnVersion, 0
-	}
 	e.scheduler.executedTxns.Add(1)
 	readSet, writeSet := e.execute(version.Index)
 	wroteNewLocation := e.mvMemory.Record(version, readSet, writeSet)
@@ -85,6 +90,6 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 
 func (e *Executor) execute(txn TxnIndex) (MultiReadSet, MultiWriteSet) {
 	view := NewMultiMVMemoryView(e.stores, e.storage, e.mvMemory, e.scheduler, txn)
-	e.executeFn(txn, view)
+	e.txExecutor(txn, view)
 	return view.Result()
 }

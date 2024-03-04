@@ -88,49 +88,59 @@ func (s *Scheduler) CheckDone() {
 	runtime.Gosched()
 }
 
+// TryIncarnate tries to incarnate a transaction index to execute.
+// Returns the transaction version if successful, otherwise returns invalid version.
+//
+// Invariant `num_active_tasks`: decreased if an invalid task is returned.
 func (s *Scheduler) TryIncarnate(idx TxnIndex) TxnVersion {
 	if int(idx) < s.block_size {
 		if incarnation, ok := s.txn_status[idx].TrySetExecuting(); ok {
 			return TxnVersion{idx, incarnation}
 		}
 	}
-	DecreaseAtomic(&s.num_active_tasks)
+	DecrAtomic(&s.num_active_tasks)
 	return InvalidTxnVersion
 }
 
 // NextVersionToExecute get the next transaction index to execute,
 // returns invalid version if no task is available
+//
+// Invariant `num_active_tasks`: increased if a valid task is returned.
 func (s *Scheduler) NextVersionToExecute() TxnVersion {
 	if s.execution_idx.Load() >= uint64(s.block_size) {
 		s.CheckDone()
 		return InvalidTxnVersion
 	}
-	IncreaseAtomic(&s.num_active_tasks)
+	IncrAtomic(&s.num_active_tasks)
 	idx_to_execute := s.execution_idx.Add(1) - 1
 	return s.TryIncarnate(TxnIndex(idx_to_execute))
 }
 
 // NextVersionToValidate get the next transaction index to validate,
-// returns invalid version if no task is available
+// returns invalid version if no task is available.
+//
+// Invariant `num_active_tasks`: increased if a valid task is returned.
 func (s *Scheduler) NextVersionToValidate() TxnVersion {
 	if s.validation_idx.Load() >= uint64(s.block_size) {
 		s.CheckDone()
 		return InvalidTxnVersion
 	}
-	IncreaseAtomic(&s.num_active_tasks)
-	idx_to_validate := s.validation_idx.Add(1) - 1
+	IncrAtomic(&s.num_active_tasks)
+	idx_to_validate := FetchIncr(&s.validation_idx)
 	if idx_to_validate < uint64(s.block_size) {
 		if ok, incarnation := s.txn_status[idx_to_validate].IsExecuted(); ok {
 			return TxnVersion{TxnIndex(idx_to_validate), incarnation}
 		}
 	}
 
-	DecreaseAtomic(&s.num_active_tasks)
+	DecrAtomic(&s.num_active_tasks)
 	return InvalidTxnVersion
 }
 
 // NextTask returns the transaction index and task kind for the next task to execute or validate,
 // returns invalid version if no task is available.
+//
+// Invariant `num_active_tasks`: increased if a valid task is returned.
 func (s *Scheduler) NextTask() (TxnVersion, TaskKind) {
 	validation_idx := s.validation_idx.Load()
 	execution_idx := s.execution_idx.Load()
@@ -161,24 +171,14 @@ func (s *Scheduler) WaitForDependency(txn TxnIndex, blocking_txn TxnIndex) *Cond
 }
 
 func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
-	var minIdx TxnIndex = TxnIndex(s.block_size)
 	for _, txn := range txns {
-		// status must be SUSPENDED
-		s.txn_status[txn].SetStatus(StatusReadyToExecute)
-		if txn < minIdx {
-			minIdx = txn
-		}
-	}
-
-	if minIdx < TxnIndex(s.block_size) {
-		// ensure dependent indices get re-executed
-		s.DecreaseExecutionIdx(minIdx)
+		s.txn_status[txn].Resume()
 	}
 }
 
+// Invariant `num_active_tasks`: decreased if an invalid task is returned.
 func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnVersion, TaskKind) {
-	// status must have been EXECUTING
-	s.txn_status[version.Index].SetStatus(StatusExecuted)
+	s.txn_status[version.Index].SetExecuted()
 
 	deps := s.txn_dependency[version.Index].Swap(nil)
 	s.ResumeDependencies(deps)
@@ -190,7 +190,7 @@ func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnV
 		// schedule validation for txn_idx and higher txns
 		s.DecreaseValidationIdx(version.Index)
 	}
-	DecreaseAtomic(&s.num_active_tasks)
+	DecrAtomic(&s.num_active_tasks)
 	return InvalidTxnVersion, 0
 }
 
@@ -198,6 +198,7 @@ func (s *Scheduler) TryValidationAbort(version TxnVersion) bool {
 	return s.txn_status[version.Index].TryValidationAbort(version.Incarnation)
 }
 
+// Invariant `num_active_tasks`: decreased if an invalid task is returned.
 func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, TaskKind) {
 	if aborted {
 		s.txn_status[txn].SetReadyStatus()
@@ -207,16 +208,8 @@ func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, Ta
 		}
 	}
 
-	DecreaseAtomic(&s.num_active_tasks)
+	DecrAtomic(&s.num_active_tasks)
 	return InvalidTxnVersion, 0
-}
-
-func (s *Scheduler) TryNotify(txn TxnIndex) bool {
-	if s.txn_status[txn].TryNotify() {
-		DecreaseAtomic(&s.num_active_tasks)
-		return true
-	}
-	return false
 }
 
 func (s *Scheduler) Stats() string {
