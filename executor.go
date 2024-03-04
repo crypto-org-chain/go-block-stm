@@ -7,40 +7,55 @@ import (
 )
 
 type Executor struct {
-	i         int
+	ctx       context.Context
 	blockSize int
 	stores    []storetypes.StoreKey
 	scheduler *Scheduler
 	storage   MultiStore
 	executeFn ExecuteFn
 	mvMemory  *MVMemory
+
+	i int
 }
 
 func NewExecutor(
-	i int,
+	ctx context.Context,
 	blockSize int,
 	stores []storetypes.StoreKey,
 	scheduler *Scheduler,
 	storage MultiStore,
 	executeFn ExecuteFn,
 	mvMemory *MVMemory,
+	i int,
 ) *Executor {
 	return &Executor{
-		i:         i,
+		ctx:       ctx,
 		blockSize: blockSize,
 		stores:    stores,
 		scheduler: scheduler,
 		storage:   storage,
 		executeFn: executeFn,
 		mvMemory:  mvMemory,
+		i:         i,
 	}
 }
 
-func (e *Executor) Run(ctx context.Context) error {
+// Invariant `num_active_tasks`:
+//   - `NextTask` increases it if returns a valid task.
+//   - `TryExecute` and `NeedsReexecution` don't change it if it returns a new valid task to run,
+//     otherwise it decreases it.
+func (e *Executor) Run() {
 	var kind TaskKind
 	version := InvalidTxnVersion
 	for !e.scheduler.Done() {
 		if !version.Valid() {
+			// check for cancellation
+			select {
+			case <-e.ctx.Done():
+				return
+			default:
+			}
+
 			version, kind = e.scheduler.NextTask()
 			continue
 		}
@@ -51,22 +66,10 @@ func (e *Executor) Run(ctx context.Context) error {
 		case TaskKindValidation:
 			version, kind = e.NeedsReexecution(version)
 		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			// continue
-		}
 	}
-	return nil
 }
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
-	if e.scheduler.TryNotify(version.Index) {
-		// resumed a suspended transaction
-		return InvalidTxnVersion, 0
-	}
 	e.scheduler.executedTxns.Add(1)
 	readSet, writeSet := e.execute(version.Index)
 	wroteNewLocation := e.mvMemory.Record(version, readSet, writeSet)
