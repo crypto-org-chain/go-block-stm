@@ -6,15 +6,17 @@ import (
 	storetypes "cosmossdk.io/store/types"
 )
 
+// Executor fields are not mutated during execution.
 type Executor struct {
-	ctx       context.Context
-	blockSize int
-	stores    []storetypes.StoreKey
-	scheduler *Scheduler
-	storage   MultiStore
-	executeFn ExecuteFn
-	mvMemory  *MVMemory
+	ctx        context.Context       // context for cancellation
+	blockSize  int                   // total number of transactions to execute
+	stores     []storetypes.StoreKey // store names
+	scheduler  *Scheduler            // scheduler for task management
+	storage    MultiStore            // storage for the executor
+	txExecutor TxExecutor            // callback to actually execute a transaction
+	mvMemory   *MVMemory             // multi-version memory for the executor
 
+	// index of the executor, used for debugging output
 	i int
 }
 
@@ -24,19 +26,19 @@ func NewExecutor(
 	stores []storetypes.StoreKey,
 	scheduler *Scheduler,
 	storage MultiStore,
-	executeFn ExecuteFn,
+	txExecutor TxExecutor,
 	mvMemory *MVMemory,
 	i int,
 ) *Executor {
 	return &Executor{
-		ctx:       ctx,
-		blockSize: blockSize,
-		stores:    stores,
-		scheduler: scheduler,
-		storage:   storage,
-		executeFn: executeFn,
-		mvMemory:  mvMemory,
-		i:         i,
+		ctx:        ctx,
+		blockSize:  blockSize,
+		stores:     stores,
+		scheduler:  scheduler,
+		storage:    storage,
+		txExecutor: txExecutor,
+		mvMemory:   mvMemory,
+		i:          i,
 	}
 }
 
@@ -88,6 +90,6 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 
 func (e *Executor) execute(txn TxnIndex) (MultiReadSet, MultiWriteSet) {
 	view := NewMultiMVMemoryView(e.stores, e.storage, e.mvMemory, e.scheduler, txn)
-	e.executeFn(txn, view)
+	e.txExecutor(txn, view)
 	return view.Result()
 }

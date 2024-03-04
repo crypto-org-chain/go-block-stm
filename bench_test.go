@@ -34,7 +34,7 @@ func BenchmarkBlockSTM(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					require.NoError(
 						b,
-						ExecuteBlock(context.Background(), tc.block.Size(), stores, storage, worker, tc.block.Execute),
+						ExecuteBlock(context.Background(), tc.block.Size(), stores, storage, worker, tc.block.ExecuteTx),
 					)
 				}
 			})

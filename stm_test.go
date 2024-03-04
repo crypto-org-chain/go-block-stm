@@ -119,7 +119,7 @@ func TestSTM(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			storage := NewMultiMemDB(stores)
 			require.NoError(t,
-				ExecuteBlock(context.Background(), tc.blk.Size(), stores, storage, tc.executors, tc.blk.Execute),
+				ExecuteBlock(context.Background(), tc.blk.Size(), stores, storage, tc.executors, tc.blk.ExecuteTx),
 			)
 			for _, err := range tc.blk.Results {
 				require.NoError(t, err)

@@ -14,7 +14,7 @@ func ExecuteBlock(
 	stores []storetypes.StoreKey,
 	storage MultiStore,
 	executors int,
-	executeFn ExecuteFn,
+	txExecutor TxExecutor,
 ) error {
 	// Create a new scheduler
 	scheduler := NewScheduler(blockSize)
@@ -23,7 +23,7 @@ func ExecuteBlock(
 	var wg sync.WaitGroup
 	wg.Add(executors)
 	for i := 0; i < executors; i++ {
-		e := NewExecutor(ctx, blockSize, stores, scheduler, storage, executeFn, mvMemory, i)
+		e := NewExecutor(ctx, blockSize, stores, scheduler, storage, txExecutor, mvMemory, i)
 		go func() {
 			defer wg.Done()
 			e.Run()
