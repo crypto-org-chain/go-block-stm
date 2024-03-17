@@ -136,7 +136,15 @@ func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) MultiLocations {
 
 func (mv *MVMemory) WriteSnapshot(storage MultiStore) {
 	for i, name := range mv.stores {
-		WriteSnapshot(storage.GetKVStore(name), mv.data[i].Snapshot())
+		store := storage.GetKVStore(name)
+		mv.data[i].SnapshotTo(func(pair KVPair) bool {
+			if pair.Value == nil {
+				store.Delete(pair.Key)
+			} else {
+				store.Set(pair.Key, pair.Value)
+			}
+			return true
+		})
 	}
 }
 

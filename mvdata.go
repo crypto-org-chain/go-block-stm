@@ -99,9 +99,15 @@ func (d *MVData) ValidateIterator(desc IteratorDescriptor, txn TxnIndex) bool {
 	return i == len(desc.Reads)
 }
 
-func (d *MVData) Snapshot() []KVPair {
-	var snapshot []KVPair
+func (d *MVData) Snapshot() (snapshot []KVPair) {
+	d.SnapshotTo(func(pair KVPair) bool {
+		snapshot = append(snapshot, pair)
+		return true
+	})
+	return
+}
 
+func (d *MVData) SnapshotTo(cb func(pair KVPair) bool) {
 	d.Scan(func(outer dataItem) bool {
 		// index order is reversed, `Min` is the latest
 		item, ok := outer.Tree.Min()
@@ -113,11 +119,8 @@ func (d *MVData) Snapshot() []KVPair {
 			return true
 		}
 
-		snapshot = append(snapshot, KVPair{Key: outer.Key, Value: item.Value})
-		return true
+		return cb(KVPair{Key: outer.Key, Value: item.Value})
 	})
-
-	return snapshot
 }
 
 type KVPair struct {
