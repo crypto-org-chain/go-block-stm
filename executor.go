@@ -16,6 +16,9 @@ type Executor struct {
 	txExecutor TxExecutor            // callback to actually execute a transaction
 	mvMemory   *MVMemory             // multi-version memory for the executor
 
+	// stores indexed by key
+	storesByName map[storetypes.StoreKey]int
+
 	// index of the executor, used for debugging output
 	i int
 }
@@ -38,7 +41,9 @@ func NewExecutor(
 		storage:    storage,
 		txExecutor: txExecutor,
 		mvMemory:   mvMemory,
-		i:          i,
+
+		storesByName: IndexStores(stores),
+		i:            i,
 	}
 }
 
@@ -89,7 +94,7 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 }
 
 func (e *Executor) execute(txn TxnIndex) (MultiReadSet, MultiWriteSet) {
-	view := NewMultiMVMemoryView(e.stores, e.storage, e.mvMemory, e.scheduler, txn)
+	view := NewMultiMVMemoryView(e.storesByName, e.storage, e.mvMemory, e.scheduler, txn)
 	e.txExecutor(txn, view)
 	return view.Result()
 }

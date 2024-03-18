@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"sync/atomic"
+
+	storetypes "cosmossdk.io/store/types"
 )
 
 type ErrReadError struct {
@@ -80,4 +82,12 @@ func BytesBeyond(a, b []byte, ascending bool) bool {
 		return bytes.Compare(a, b) > 0
 	}
 	return bytes.Compare(a, b) < 0
+}
+
+func IndexStores(stores []storetypes.StoreKey) map[storetypes.StoreKey]int {
+	storesByName := make(map[storetypes.StoreKey]int, len(stores))
+	for i, name := range stores {
+		storesByName[name] = i
+	}
+	return storesByName
 }

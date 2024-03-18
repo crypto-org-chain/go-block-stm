@@ -35,15 +35,15 @@ func NewMVMemory(block_size int, stores []storetypes.StoreKey) *MVMemory {
 
 func (mv *MVMemory) Record(version TxnVersion, rs MultiReadSet, ws MultiWriteSet) bool {
 	newLocations := make(MultiLocations, len(mv.stores))
-	for i, writeSet := range ws {
-		if writeSet.Len() == 0 {
+	for i, ws := range ws {
+		if ws == nil || ws.Len() == 0 {
 			continue
 		}
 
-		newLocations[i] = make([]Key, 0, writeSet.Len())
+		newLocations[i] = make([]Key, 0, ws.Len())
 
 		// apply_write_set
-		writeSet.Scan(func(key Key, value Value) bool {
+		ws.Scan(func(key Key, value Value) bool {
 			mv.data[i].Write(key, value, version)
 			newLocations[i] = append(newLocations[i], key)
 			return true

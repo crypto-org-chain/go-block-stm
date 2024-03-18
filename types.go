@@ -57,12 +57,12 @@ type ReadSet struct {
 
 type WriteSet = MemDB
 
-func NewWriteSet() WriteSet {
-	return *NewMemDBNonConcurrent()
+func NewWriteSet() *WriteSet {
+	return NewMemDBNonConcurrent()
 }
 
 type (
-	MultiWriteSet = []WriteSet
+	MultiWriteSet = []*WriteSet
 	MultiReadSet  = []ReadSet
 )
 

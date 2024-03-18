@@ -17,7 +17,7 @@ type MVMemoryView struct {
 
 	txn      TxnIndex
 	readSet  ReadSet
-	writeSet WriteSet
+	writeSet *WriteSet
 }
 
 var _ storetypes.KVStore = (*MVMemoryView)(nil)
@@ -29,7 +29,12 @@ func NewMVMemoryView(store int, storage storetypes.KVStore, mvMemory *MVMemory, 
 		mvMemory:  mvMemory,
 		scheduler: schedule,
 		txn:       txn,
-		writeSet:  NewWriteSet(),
+	}
+}
+
+func (s *MVMemoryView) lazyInit() {
+	if s.writeSet == nil {
+		s.writeSet = NewWriteSet()
 	}
 }
 
@@ -73,10 +78,12 @@ func (s *MVMemoryView) Set(key, value []byte) {
 	if value == nil {
 		panic("nil value is not allowed")
 	}
+	s.lazyInit()
 	s.writeSet.OverlaySet(key, value)
 }
 
 func (s *MVMemoryView) Delete(key []byte) {
+	s.lazyInit()
 	s.writeSet.OverlaySet(key, nil)
 }
 

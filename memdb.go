@@ -40,12 +40,18 @@ func NewMemDBNonConcurrent() *MemDB {
 }
 
 func (db *MemDB) Scan(cb func(key Key, value Value) bool) {
+	if db == nil {
+		return
+	}
 	db.BTreeG.Scan(func(item memdbItem) bool {
 		return cb(item.key, item.value)
 	})
 }
 
 func (db *MemDB) Get(key []byte) []byte {
+	if db == nil {
+		return nil
+	}
 	item, ok := db.BTreeG.Get(memdbItem{key: key})
 	if !ok {
 		return nil
@@ -71,6 +77,9 @@ func (db *MemDB) Delete(key []byte) {
 // When used as an overlay (e.g. WriteSet), it stores the `nil` value to represent deleted keys,
 // so we return seperate bool value for found status.
 func (db *MemDB) OverlayGet(key Key) (Value, bool) {
+	if db == nil {
+		return nil, false
+	}
 	item, ok := db.BTreeG.Get(memdbItem{key: key})
 	if !ok {
 		return nil, false
@@ -92,6 +101,9 @@ func (db *MemDB) ReverseIterator(start, end []byte) storetypes.Iterator {
 }
 
 func (db *MemDB) iterator(start, end Key, ascending bool) storetypes.Iterator {
+	if db == nil {
+		return nil
+	}
 	return NewMemDBIterator(start, end, db.Iter(), ascending)
 }
 

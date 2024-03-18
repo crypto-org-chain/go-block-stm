@@ -3,39 +3,52 @@ package block_stm
 import storetypes "cosmossdk.io/store/types"
 
 type MultiMVMemoryView struct {
-	stores []storetypes.StoreKey
-	views  map[storetypes.StoreKey]*MVMemoryView
+	stores    map[storetypes.StoreKey]int
+	views     []*MVMemoryView
+	txn       TxnIndex
+	storage   MultiStore
+	mvMemory  *MVMemory
+	scheduler *Scheduler
 }
 
 var _ MultiStore = (*MultiMVMemoryView)(nil)
 
 func NewMultiMVMemoryView(
-	stores []storetypes.StoreKey,
+	stores map[storetypes.StoreKey]int,
 	storage MultiStore,
-	mvMemory *MVMemory, schedule *Scheduler,
+	mvMemory *MVMemory,
+	scheduler *Scheduler,
 	txn TxnIndex,
 ) *MultiMVMemoryView {
-	views := make(map[storetypes.StoreKey]*MVMemoryView, len(stores))
-	for i, name := range stores {
-		views[name] = NewMVMemoryView(i, storage.GetKVStore(name), mvMemory, schedule, txn)
-	}
 	return &MultiMVMemoryView{
-		stores: stores,
-		views:  views,
+		stores:    stores,
+		views:     make([]*MVMemoryView, len(stores)),
+		txn:       txn,
+		storage:   storage,
+		mvMemory:  mvMemory,
+		scheduler: scheduler,
 	}
 }
 
 func (mv *MultiMVMemoryView) GetKVStore(name storetypes.StoreKey) storetypes.KVStore {
-	return mv.views[name]
+	i, ok := mv.stores[name]
+	if !ok {
+		return nil
+	}
+	if mv.views[i] == nil {
+		mv.views[i] = NewMVMemoryView(i, mv.storage.GetKVStore(name), mv.mvMemory, mv.scheduler, mv.txn)
+	}
+	return mv.views[i]
 }
 
 func (s *MultiMVMemoryView) Result() (MultiReadSet, MultiWriteSet) {
-	rs := make(MultiReadSet, len(s.views))
-	ws := make(MultiWriteSet, len(s.views))
-	for i, name := range s.stores {
-		view := s.views[name]
-		rs[i] = view.readSet
-		ws[i] = view.writeSet
+	resReads := make(MultiReadSet, len(s.views))
+	resWrites := make(MultiWriteSet, len(s.views))
+	for i, view := range s.views {
+		if view != nil {
+			resReads[i] = view.readSet
+			resWrites[i] = view.writeSet
+		}
 	}
-	return rs, ws
+	return resReads, resWrites
 }

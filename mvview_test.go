@@ -10,10 +10,11 @@ import (
 
 func TestMVMemoryViewDelete(t *testing.T) {
 	stores := []storetypes.StoreKey{StoreKeyAuth}
+	storesByName := IndexStores(stores)
 	mv := NewMVMemory(16, stores)
 	storage := NewMultiMemDB(stores)
 
-	mview := NewMultiMVMemoryView(stores, storage, mv, nil, 0)
+	mview := NewMultiMVMemoryView(storesByName, storage, mv, nil, 0)
 	view := mview.GetKVStore(StoreKeyAuth)
 	view.Set(Key("a"), Value("1"))
 	view.Set(Key("b"), Value("1"))
@@ -21,14 +22,14 @@ func TestMVMemoryViewDelete(t *testing.T) {
 	rs, ws := mview.Result()
 	require.True(t, mv.Record(TxnVersion{0, 0}, rs, ws))
 
-	mview = NewMultiMVMemoryView(stores, storage, mv, nil, 1)
+	mview = NewMultiMVMemoryView(storesByName, storage, mv, nil, 1)
 	view = mview.GetKVStore(StoreKeyAuth)
 	view.Delete(Key("a"))
 	view.Set(Key("b"), Value("2"))
 	rs, ws = mview.Result()
 	require.True(t, mv.Record(TxnVersion{1, 0}, rs, ws))
 
-	mview = NewMultiMVMemoryView(stores, storage, mv, nil, 2)
+	mview = NewMultiMVMemoryView(storesByName, storage, mv, nil, 2)
 	view = mview.GetKVStore(StoreKeyAuth)
 	require.Nil(t, view.Get(Key("a")))
 	require.False(t, view.Has(Key("a")))
@@ -36,6 +37,7 @@ func TestMVMemoryViewDelete(t *testing.T) {
 
 func TestMVMemoryViewIteration(t *testing.T) {
 	stores := []storetypes.StoreKey{StoreKeyAuth}
+	storesByName := IndexStores(stores)
 	mv := NewMVMemory(16, stores)
 	storage := NewMultiMemDB(stores)
 	{
@@ -67,7 +69,7 @@ func TestMVMemoryViewIteration(t *testing.T) {
 	}
 
 	for i, pairs := range sets {
-		mview := NewMultiMVMemoryView(stores, storage, mv, nil, TxnIndex(i))
+		mview := NewMultiMVMemoryView(storesByName, storage, mv, nil, TxnIndex(i))
 		view := mview.GetKVStore(StoreKeyAuth)
 		for _, kv := range pairs {
 			view.Set(kv.Key, kv.Value)
@@ -158,7 +160,7 @@ func TestMVMemoryViewIteration(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("version-%d", tc.index), func(t *testing.T) {
-			view := NewMultiMVMemoryView(stores, storage, mv, nil, tc.index).GetKVStore(StoreKeyAuth)
+			view := NewMultiMVMemoryView(storesByName, storage, mv, nil, tc.index).GetKVStore(StoreKeyAuth)
 			var iter storetypes.Iterator
 			if tc.ascending {
 				iter = view.Iterator(tc.start, tc.end)

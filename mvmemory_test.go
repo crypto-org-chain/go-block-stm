@@ -7,7 +7,7 @@ import (
 	"github.com/test-go/testify/require"
 )
 
-func BuildWriteSet(pairs ...KVPair) WriteSet {
+func BuildWriteSet(pairs ...KVPair) *WriteSet {
 	ws := NewWriteSet()
 	for _, pair := range pairs {
 		ws.Set(pair.Key, pair.Value)

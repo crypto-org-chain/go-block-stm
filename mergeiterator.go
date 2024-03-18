@@ -7,6 +7,18 @@ import (
 	"cosmossdk.io/store/types"
 )
 
+type noopIterator struct{}
+
+var _ types.Iterator = noopIterator{}
+
+func (iter noopIterator) Domain() (start, end []byte) { return nil, nil }
+func (iter noopIterator) Valid() bool                 { return false }
+func (iter noopIterator) Next()                       {}
+func (iter noopIterator) Key() []byte                 { return nil }
+func (iter noopIterator) Value() []byte               { return nil }
+func (iter noopIterator) Close() error                { return nil }
+func (iter noopIterator) Error() error                { return nil }
+
 // cacheMergeIterator merges a parent Iterator and a cache Iterator.
 // The cache iterator may return nil keys to signal that an item
 // had been deleted (but not deleted in the parent).
@@ -26,6 +38,12 @@ type cacheMergeIterator struct {
 var _ types.Iterator = (*cacheMergeIterator)(nil)
 
 func NewCacheMergeIterator(parent, cache types.Iterator, ascending bool, onClose func(types.Iterator)) types.Iterator {
+	if parent == nil {
+		parent = noopIterator{}
+	}
+	if cache == nil {
+		cache = noopIterator{}
+	}
 	iter := &cacheMergeIterator{
 		parent:    parent,
 		cache:     cache,
