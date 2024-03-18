@@ -10,7 +10,13 @@ import (
 )
 
 func BenchmarkBlockSTM(b *testing.B) {
-	stores := []storetypes.StoreKey{StoreKeyAuth, StoreKeyBank}
+	stores := []storetypes.StoreKey{
+		StoreKeyAuth,
+		StoreKeyBank,
+	}
+	for i := 0; i < 15; i++ {
+		stores = append(stores, storetypes.NewKVStoreKey("test"+strconv.Itoa(i)))
+	}
 	storage := NewMultiMemDB(stores)
 	testCases := []struct {
 		name  string
