@@ -2,7 +2,10 @@ package block_stm
 
 import (
 	"bytes"
+	"io"
 
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/tracekv"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/tidwall/btree"
 )
@@ -22,7 +25,7 @@ type MemDB struct {
 	btree.BTreeG[memdbItem]
 }
 
-var _ KVStore = (*MemDB)(nil)
+var _ storetypes.KVStore = (*MemDB)(nil)
 
 func NewMemDB() *MemDB {
 	return &MemDB{*btree.NewBTreeG[memdbItem](KeyItemLess)}
@@ -114,6 +117,20 @@ func (db *MemDB) Equal(other *MemDB) bool {
 	}
 }
 
+func (db *MemDB) GetStoreType() storetypes.StoreType {
+	return storetypes.StoreTypeIAVL
+}
+
+// CacheWrap implements types.KVStore.
+func (db *MemDB) CacheWrap() storetypes.CacheWrap {
+	return cachekv.NewStore(storetypes.KVStore(db))
+}
+
+// CacheWrapWithTrace implements types.KVStore.
+func (db *MemDB) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
+	return cachekv.NewStore(tracekv.NewStore(db, w, tc))
+}
+
 type MemDBIterator struct {
 	BTreeIteratorG[memdbItem]
 }
@@ -121,7 +138,7 @@ type MemDBIterator struct {
 var _ storetypes.Iterator = (*MemDBIterator)(nil)
 
 func NewMemDBIterator(start, end Key, iter btree.IterG[memdbItem], ascending bool) *MemDBIterator {
-	return &MemDBIterator{*NewBTreeIteratorG[memdbItem](
+	return &MemDBIterator{*NewBTreeIteratorG(
 		memdbItem{key: start},
 		memdbItem{key: end},
 		iter,
@@ -151,6 +168,6 @@ func (mmdb *MultiMemDB) GetDB(store storetypes.StoreKey) *MemDB {
 	return mmdb.dbs[store]
 }
 
-func (mmdb *MultiMemDB) GetKVStore(store storetypes.StoreKey) KVStore {
+func (mmdb *MultiMemDB) GetKVStore(store storetypes.StoreKey) storetypes.KVStore {
 	return mmdb.GetDB(store)
 }

@@ -25,7 +25,7 @@ func NewMultiMVMemoryView(
 	}
 }
 
-func (mv *MultiMVMemoryView) GetKVStore(name storetypes.StoreKey) KVStore {
+func (mv *MultiMVMemoryView) GetKVStore(name storetypes.StoreKey) storetypes.KVStore {
 	return mv.views[name]
 }
 

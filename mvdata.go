@@ -22,7 +22,7 @@ func (d *MVData) getTree(key Key) *BTree[secondaryDataItem] {
 func (d *MVData) getTreeOrDefault(key Key) *BTree[secondaryDataItem] {
 	return d.GetOrDefault(dataItem{Key: key}, func(item *dataItem) {
 		if item.Tree == nil {
-			item.Tree = NewBTree[secondaryDataItem](secondaryDataItemLess)
+			item.Tree = NewBTree(secondaryDataItemLess)
 		}
 	}).Tree
 }

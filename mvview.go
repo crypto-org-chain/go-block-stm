@@ -1,10 +1,16 @@
 package block_stm
 
-import storetypes "cosmossdk.io/store/types"
+import (
+	"io"
+
+	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/tracekv"
+	storetypes "cosmossdk.io/store/types"
+)
 
 // MVMemoryView wraps `MVMemory` for execution of a single transaction.
 type MVMemoryView struct {
-	storage   KVStore
+	storage   storetypes.KVStore
 	mvMemory  *MVMemory
 	scheduler *Scheduler
 	store     int
@@ -14,9 +20,9 @@ type MVMemoryView struct {
 	writeSet WriteSet
 }
 
-var _ KVStore = (*MVMemoryView)(nil)
+var _ storetypes.KVStore = (*MVMemoryView)(nil)
 
-func NewMVMemoryView(store int, storage KVStore, mvMemory *MVMemory, schedule *Scheduler, txn TxnIndex) *MVMemoryView {
+func NewMVMemoryView(store int, storage storetypes.KVStore, mvMemory *MVMemory, schedule *Scheduler, txn TxnIndex) *MVMemoryView {
 	return &MVMemoryView{
 		store:     store,
 		storage:   storage,
@@ -125,4 +131,19 @@ func (s *MVMemoryView) iterator(opts IteratorOptions) storetypes.Iterator {
 		opts.Ascending,
 		onClose,
 	)
+}
+
+// CacheWrap implements types.KVStore.
+func (s *MVMemoryView) CacheWrap() storetypes.CacheWrap {
+	return cachekv.NewStore(storetypes.KVStore(s))
+}
+
+// CacheWrapWithTrace implements types.KVStore.
+func (s *MVMemoryView) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
+	return cachekv.NewStore(tracekv.NewStore(s, w, tc))
+}
+
+// GetStoreType implements types.KVStore.
+func (s *MVMemoryView) GetStoreType() storetypes.StoreType {
+	return storetypes.StoreTypeIAVL
 }

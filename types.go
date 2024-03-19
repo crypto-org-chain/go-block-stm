@@ -77,12 +77,6 @@ func KeyItemLess[T KeyItem](a, b T) bool {
 // TxExecutor executes transactions on top of a multi-version memory view.
 type TxExecutor func(TxnIndex, MultiStore)
 
-type KVStore interface {
-	storetypes.BasicKVStore
-	Iterator(start, end []byte) storetypes.Iterator
-	ReverseIterator(start, end []byte) storetypes.Iterator
-}
-
 type MultiStore interface {
-	GetKVStore(storetypes.StoreKey) KVStore
+	GetKVStore(storetypes.StoreKey) storetypes.KVStore
 }

@@ -148,7 +148,7 @@ func (mv *MVMemory) WriteSnapshot(storage MultiStore) {
 	}
 }
 
-func WriteSnapshot(storage KVStore, snapshot []KVPair) {
+func WriteSnapshot(storage storetypes.KVStore, snapshot []KVPair) {
 	for _, pair := range snapshot {
 		if pair.Value == nil {
 			storage.Delete(pair.Key)

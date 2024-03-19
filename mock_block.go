@@ -116,7 +116,7 @@ func genRandomSignature() func() {
 	}
 }
 
-func increaseNonce(i int, sender string, store KVStore) error {
+func increaseNonce(i int, sender string, store storetypes.KVStore) error {
 	nonceKey := []byte("nonce" + sender)
 	var nonce uint64
 	v := store.Get(nonceKey)
@@ -136,7 +136,7 @@ func increaseNonce(i int, sender string, store KVStore) error {
 	return nil
 }
 
-func bankTransfer(i int, sender, receiver string, amount uint64, store KVStore) error {
+func bankTransfer(i int, sender, receiver string, amount uint64, store storetypes.KVStore) error {
 	senderKey := []byte("balance" + sender)
 	receiverKey := []byte("balance" + receiver)
 
