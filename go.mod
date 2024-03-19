@@ -7,7 +7,6 @@ require (
 	github.com/cometbft/cometbft v0.38.2
 	github.com/test-go/testify v1.1.4
 	github.com/tidwall/btree v1.7.0
-	golang.org/x/sync v0.4.0
 )
 
 require (
@@ -71,4 +70,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/tidwall/btree => github.com/yihuang/btree v0.0.0-20240215071918-6726a9b22e40
+replace github.com/tidwall/btree => github.com/yihuang/btree v0.0.0-20240318010431-d365682df9a7

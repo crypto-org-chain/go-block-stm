@@ -12,10 +12,11 @@ type BTree[T any] struct {
 }
 
 // NewBTree returns a new BTree.
-func NewBTree[T any](less func(a, b T) bool) *BTree[T] {
-	tree := btree.NewBTreeGOptions[T](less, btree.Options{
+func NewBTree[T any](less func(a, b T) bool, degree int) *BTree[T] {
+	tree := btree.NewBTreeGOptions(less, btree.Options{
 		NoLocks:  true,
 		ReadOnly: true,
+		Degree:   degree,
 	})
 	t := &BTree[T]{}
 	t.Store(tree)

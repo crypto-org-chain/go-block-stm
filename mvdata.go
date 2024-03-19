@@ -4,12 +4,18 @@ import (
 	"bytes"
 )
 
+const (
+	// Since we do copy-on-write a lot, smaller degree means smaller allocations
+	OuterBTreeDegree = 4
+	InnerBTreeDegree = 4
+)
+
 type MVData struct {
 	BTree[dataItem]
 }
 
 func NewMVData() *MVData {
-	return &MVData{*NewBTree[dataItem](KeyItemLess)}
+	return &MVData{*NewBTree(KeyItemLess[dataItem], OuterBTreeDegree)}
 }
 
 // getTree returns `nil` if not found
@@ -22,7 +28,7 @@ func (d *MVData) getTree(key Key) *BTree[secondaryDataItem] {
 func (d *MVData) getTreeOrDefault(key Key) *BTree[secondaryDataItem] {
 	return d.GetOrDefault(dataItem{Key: key}, func(item *dataItem) {
 		if item.Tree == nil {
-			item.Tree = NewBTree(secondaryDataItemLess)
+			item.Tree = NewBTree(secondaryLesser, InnerBTreeDegree)
 		}
 	}).Tree
 }
@@ -146,7 +152,7 @@ type secondaryDataItem struct {
 	Estimate    bool
 }
 
-func secondaryDataItemLess(a, b secondaryDataItem) bool {
+func secondaryLesser(a, b secondaryDataItem) bool {
 	// reverse the order
 	return a.Index > b.Index
 }
