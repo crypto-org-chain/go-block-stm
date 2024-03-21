@@ -3,6 +3,8 @@ package block_stm
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime"
 	"sync"
 
 	storetypes "cosmossdk.io/store/types"
@@ -16,6 +18,13 @@ func ExecuteBlock(
 	executors int,
 	txExecutor TxExecutor,
 ) error {
+	if executors < 0 {
+		return fmt.Errorf("invalid number of executors: %d", executors)
+	}
+	if executors == 0 {
+		executors = runtime.NumCPU()
+	}
+
 	// Create a new scheduler
 	scheduler := NewScheduler(blockSize)
 	mvMemory := NewMVMemory(blockSize, stores)
