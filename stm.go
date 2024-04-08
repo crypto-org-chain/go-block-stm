@@ -13,7 +13,7 @@ import (
 func ExecuteBlock(
 	ctx context.Context,
 	blockSize int,
-	stores []storetypes.StoreKey,
+	stores map[storetypes.StoreKey]int,
 	storage MultiStore,
 	executors int,
 	txExecutor TxExecutor,
@@ -32,7 +32,7 @@ func ExecuteBlock(
 	var wg sync.WaitGroup
 	wg.Add(executors)
 	for i := 0; i < executors; i++ {
-		e := NewExecutor(ctx, blockSize, stores, scheduler, storage, txExecutor, mvMemory, i)
+		e := NewExecutor(ctx, blockSize, scheduler, storage, txExecutor, mvMemory, i)
 		go func() {
 			defer wg.Done()
 			e.Run()

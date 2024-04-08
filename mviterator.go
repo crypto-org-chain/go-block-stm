@@ -6,12 +6,12 @@ import (
 )
 
 // MVIterator is an iterator for a multi-versioned store.
-type MVIterator struct {
-	BTreeIteratorG[dataItem]
+type MVIterator[V any] struct {
+	BTreeIteratorG[dataItem[V]]
 	txn TxnIndex
 
 	// cache current found value and version
-	value   []byte
+	value   V
 	version TxnVersion
 
 	// record the observed reads during iteration during execution
@@ -22,16 +22,16 @@ type MVIterator struct {
 	readEstimateValue bool
 }
 
-var _ storetypes.Iterator = (*MVIterator)(nil)
+var _ storetypes.Iterator = (*MVIterator[[]byte])(nil)
 
-func NewMVIterator(
-	opts IteratorOptions, txn TxnIndex, iter btree.IterG[dataItem],
+func NewMVIterator[V any](
+	opts IteratorOptions, txn TxnIndex, iter btree.IterG[dataItem[V]],
 	waitFn func(TxnIndex),
-) *MVIterator {
-	it := &MVIterator{
+) *MVIterator[V] {
+	it := &MVIterator[V]{
 		BTreeIteratorG: *NewBTreeIteratorG(
-			dataItem{Key: opts.Start},
-			dataItem{Key: opts.End},
+			dataItem[V]{Key: opts.Start},
+			dataItem[V]{Key: opts.End},
 			iter,
 			opts.Ascending,
 		),
@@ -43,33 +43,33 @@ func NewMVIterator(
 }
 
 // Executing returns if the iterator is running in execution mode.
-func (it *MVIterator) Executing() bool {
+func (it *MVIterator[V]) Executing() bool {
 	return it.waitFn != nil
 }
 
-func (it *MVIterator) Next() {
+func (it *MVIterator[V]) Next() {
 	it.BTreeIteratorG.Next()
 	it.resolveValue()
 }
 
-func (it *MVIterator) Value() []byte {
+func (it *MVIterator[V]) Value() V {
 	return it.value
 }
 
-func (it *MVIterator) Version() TxnVersion {
+func (it *MVIterator[V]) Version() TxnVersion {
 	return it.version
 }
 
-func (it *MVIterator) Reads() []ReadDescriptor {
+func (it *MVIterator[V]) Reads() []ReadDescriptor {
 	return it.reads
 }
 
-func (it *MVIterator) ReadEstimateValue() bool {
+func (it *MVIterator[V]) ReadEstimateValue() bool {
 	return it.readEstimateValue
 }
 
 // resolveValue skips the non-exist values in the iterator based on the txn index, and caches the first existing one.
-func (it *MVIterator) resolveValue() {
+func (it *MVIterator[V]) resolveValue() {
 	inner := &it.BTreeIteratorG
 	for ; inner.Valid(); inner.Next() {
 		v, ok := it.resolveValueInner(inner.Item().Tree)
@@ -102,7 +102,7 @@ func (it *MVIterator) resolveValue() {
 // - (nil, true) if the value is not found
 // - (nil, false) if the value is an estimate and we should fail the validation
 // - (v, true) if the value is found
-func (it *MVIterator) resolveValueInner(tree *BTree[secondaryDataItem]) (*secondaryDataItem, bool) {
+func (it *MVIterator[V]) resolveValueInner(tree *BTree[secondaryDataItem[V]]) (*secondaryDataItem[V], bool) {
 	for {
 		v, ok := seekClosestTxn(tree, it.txn)
 		if !ok {

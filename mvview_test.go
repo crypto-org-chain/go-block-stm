@@ -9,24 +9,24 @@ import (
 )
 
 func TestMVMemoryViewDelete(t *testing.T) {
-	stores := []storetypes.StoreKey{StoreKeyAuth}
+	stores := map[storetypes.StoreKey]int{
+		StoreKeyAuth: 0,
+	}
 	mv := NewMVMemory(16, stores)
 	storage := NewMultiMemDB(stores)
 
 	mview := NewMultiMVMemoryView(stores, storage, mv, nil, 0)
 	view := mview.GetKVStore(StoreKeyAuth)
-	view.Set(Key("a"), Value("1"))
-	view.Set(Key("b"), Value("1"))
-	view.Set(Key("c"), Value("1"))
-	rs, ws := mview.Result()
-	require.True(t, mv.Record(TxnVersion{0, 0}, rs, ws))
+	view.Set(Key("a"), []byte("1"))
+	view.Set(Key("b"), []byte("1"))
+	view.Set(Key("c"), []byte("1"))
+	require.True(t, mv.Record(TxnVersion{0, 0}, mview))
 
 	mview = NewMultiMVMemoryView(stores, storage, mv, nil, 1)
 	view = mview.GetKVStore(StoreKeyAuth)
 	view.Delete(Key("a"))
-	view.Set(Key("b"), Value("2"))
-	rs, ws = mview.Result()
-	require.True(t, mv.Record(TxnVersion{1, 0}, rs, ws))
+	view.Set(Key("b"), []byte("2"))
+	require.True(t, mv.Record(TxnVersion{1, 0}, mview))
 
 	mview = NewMultiMVMemoryView(stores, storage, mv, nil, 2)
 	view = mview.GetKVStore(StoreKeyAuth)
@@ -35,13 +35,13 @@ func TestMVMemoryViewDelete(t *testing.T) {
 }
 
 func TestMVMemoryViewIteration(t *testing.T) {
-	stores := []storetypes.StoreKey{StoreKeyAuth}
+	stores := map[storetypes.StoreKey]int{StoreKeyAuth: 0}
 	mv := NewMVMemory(16, stores)
 	storage := NewMultiMemDB(stores)
 	{
 		parentState := []KVPair{
-			{Key("a"), Value("1")},
-			{Key("A"), Value("1")},
+			{Key("a"), []byte("1")},
+			{Key("A"), []byte("1")},
 		}
 		parent := storage.GetKVStore(StoreKeyAuth)
 		for _, kv := range parentState {
@@ -50,12 +50,12 @@ func TestMVMemoryViewIteration(t *testing.T) {
 	}
 
 	sets := [][]KVPair{
-		{{Key("a"), Value("1")}, {Key("b"), Value("1")}, {Key("c"), Value("1")}},
-		{{Key("b"), Value("2")}, {Key("c"), Value("2")}, {Key("d"), Value("2")}},
-		{{Key("c"), Value("3")}, {Key("d"), Value("3")}, {Key("e"), Value("3")}},
-		{{Key("d"), Value("4")}, {Key("f"), Value("4")}},
-		{{Key("e"), Value("5")}, {Key("f"), Value("5")}, {Key("g"), Value("5")}},
-		{{Key("f"), Value("6")}, {Key("g"), Value("6")}, {Key("a"), Value("6")}},
+		{{Key("a"), []byte("1")}, {Key("b"), []byte("1")}, {Key("c"), []byte("1")}},
+		{{Key("b"), []byte("2")}, {Key("c"), []byte("2")}, {Key("d"), []byte("2")}},
+		{{Key("c"), []byte("3")}, {Key("d"), []byte("3")}, {Key("e"), []byte("3")}},
+		{{Key("d"), []byte("4")}, {Key("f"), []byte("4")}},
+		{{Key("e"), []byte("5")}, {Key("f"), []byte("5")}, {Key("g"), []byte("5")}},
+		{{Key("f"), []byte("6")}, {Key("g"), []byte("6")}, {Key("a"), []byte("6")}},
 	}
 	deletes := [][]Key{
 		{},
@@ -75,8 +75,7 @@ func TestMVMemoryViewIteration(t *testing.T) {
 		for _, key := range deletes[i] {
 			view.Delete(key)
 		}
-		rs, ws := mview.Result()
-		require.True(t, mv.Record(TxnVersion{TxnIndex(i), 0}, rs, ws))
+		require.True(t, mv.Record(TxnVersion{TxnIndex(i), 0}, mview))
 	}
 
 	testCases := []struct {
@@ -86,73 +85,73 @@ func TestMVMemoryViewIteration(t *testing.T) {
 		expect     []KVPair
 	}{
 		{2, nil, nil, true, []KVPair{
-			{Key("A"), Value("1")},
-			{Key("a"), Value("1")},
-			{Key("b"), Value("2")},
-			{Key("c"), Value("2")},
-			{Key("d"), Value("2")},
+			{Key("A"), []byte("1")},
+			{Key("a"), []byte("1")},
+			{Key("b"), []byte("2")},
+			{Key("c"), []byte("2")},
+			{Key("d"), []byte("2")},
 		}},
 		{3, nil, nil, true, []KVPair{
-			{Key("A"), Value("1")},
-			{Key("b"), Value("2")},
-			{Key("c"), Value("3")},
-			{Key("d"), Value("3")},
-			{Key("e"), Value("3")},
+			{Key("A"), []byte("1")},
+			{Key("b"), []byte("2")},
+			{Key("c"), []byte("3")},
+			{Key("d"), []byte("3")},
+			{Key("e"), []byte("3")},
 		}},
 		{3, nil, nil, false, []KVPair{
-			{Key("e"), Value("3")},
-			{Key("d"), Value("3")},
-			{Key("c"), Value("3")},
-			{Key("b"), Value("2")},
-			{Key("A"), Value("1")},
+			{Key("e"), []byte("3")},
+			{Key("d"), []byte("3")},
+			{Key("c"), []byte("3")},
+			{Key("b"), []byte("2")},
+			{Key("A"), []byte("1")},
 		}},
 		{4, nil, nil, true, []KVPair{
-			{Key("b"), Value("2")},
-			{Key("c"), Value("3")},
-			{Key("d"), Value("4")},
-			{Key("f"), Value("4")},
+			{Key("b"), []byte("2")},
+			{Key("c"), []byte("3")},
+			{Key("d"), []byte("4")},
+			{Key("f"), []byte("4")},
 		}},
 		{5, nil, nil, true, []KVPair{
-			{Key("b"), Value("2")},
-			{Key("c"), Value("3")},
-			{Key("d"), Value("4")},
-			{Key("e"), Value("5")},
-			{Key("f"), Value("5")},
-			{Key("g"), Value("5")},
+			{Key("b"), []byte("2")},
+			{Key("c"), []byte("3")},
+			{Key("d"), []byte("4")},
+			{Key("e"), []byte("5")},
+			{Key("f"), []byte("5")},
+			{Key("g"), []byte("5")},
 		}},
 		{6, nil, nil, true, []KVPair{
-			{Key("a"), Value("6")},
-			{Key("e"), Value("5")},
-			{Key("f"), Value("6")},
-			{Key("g"), Value("6")},
+			{Key("a"), []byte("6")},
+			{Key("e"), []byte("5")},
+			{Key("f"), []byte("6")},
+			{Key("g"), []byte("6")},
 		}},
 		{6, Key("e"), Key("g"), true, []KVPair{
-			{Key("e"), Value("5")},
-			{Key("f"), Value("6")},
+			{Key("e"), []byte("5")},
+			{Key("f"), []byte("6")},
 		}},
 		{6, Key("e"), Key("g"), false, []KVPair{
-			{Key("f"), Value("6")},
-			{Key("e"), Value("5")},
+			{Key("f"), []byte("6")},
+			{Key("e"), []byte("5")},
 		}},
 		{6, Key("b"), nil, true, []KVPair{
-			{Key("e"), Value("5")},
-			{Key("f"), Value("6")},
-			{Key("g"), Value("6")},
+			{Key("e"), []byte("5")},
+			{Key("f"), []byte("6")},
+			{Key("g"), []byte("6")},
 		}},
 		{6, Key("b"), nil, false, []KVPair{
-			{Key("g"), Value("6")},
-			{Key("f"), Value("6")},
-			{Key("e"), Value("5")},
+			{Key("g"), []byte("6")},
+			{Key("f"), []byte("6")},
+			{Key("e"), []byte("5")},
 		}},
 		{6, nil, Key("g"), true, []KVPair{
-			{Key("a"), Value("6")},
-			{Key("e"), Value("5")},
-			{Key("f"), Value("6")},
+			{Key("a"), []byte("6")},
+			{Key("e"), []byte("5")},
+			{Key("f"), []byte("6")},
 		}},
 		{6, nil, Key("g"), false, []KVPair{
-			{Key("f"), Value("6")},
-			{Key("e"), Value("5")},
-			{Key("a"), Value("6")},
+			{Key("f"), []byte("6")},
+			{Key("e"), []byte("5")},
+			{Key("a"), []byte("6")},
 		}},
 	}
 
@@ -171,10 +170,10 @@ func TestMVMemoryViewIteration(t *testing.T) {
 	}
 }
 
-func CollectIterator(iter storetypes.Iterator) []KVPair {
-	var res []KVPair
+func CollectIterator[V any](iter storetypes.GIterator[V]) []GKVPair[V] {
+	var res []GKVPair[V]
 	for iter.Valid() {
-		res = append(res, KVPair{iter.Key(), iter.Value()})
+		res = append(res, GKVPair[V]{iter.Key(), iter.Value()})
 		iter.Next()
 	}
 	return res

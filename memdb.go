@@ -1,173 +1,195 @@
 package block_stm
 
 import (
-	"bytes"
-	"io"
-
 	"cosmossdk.io/store/cachekv"
-	"cosmossdk.io/store/tracekv"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/tidwall/btree"
 )
 
-type memdbItem struct {
-	key   Key
-	value Value
-}
+type (
+	MemDB    = GMemDB[[]byte]
+	ObjMemDB = GMemDB[any]
+)
 
-var _ KeyItem = memdbItem{}
-
-func (item memdbItem) GetKey() []byte {
-	return item.key
-}
-
-type MemDB struct {
-	btree.BTreeG[memdbItem]
-}
-
-var _ storetypes.KVStore = (*MemDB)(nil)
+var (
+	_ storetypes.KVStore = (*MemDB)(nil)
+	_ storetypes.ObjKVStore = (*ObjMemDB)(nil)
+)
 
 func NewMemDB() *MemDB {
-	return &MemDB{*btree.NewBTreeG[memdbItem](KeyItemLess)}
+	return NewGMemDB(BytesIsZero, BytesLen)
 }
 
-// NewMemDBNonConcurrent returns a new BTree which is not safe for concurrent
-// write operations by multiple goroutines.
-func NewMemDBNonConcurrent() *MemDB {
-	return &MemDB{*btree.NewBTreeGOptions[memdbItem](KeyItemLess, btree.Options{
-		NoLocks: true,
-	})}
+func NewObjMemDB() *ObjMemDB {
+	return NewGMemDB(ObjIsZero, ObjLen)
 }
 
-func (db *MemDB) Scan(cb func(key Key, value Value) bool) {
-	db.BTreeG.Scan(func(item memdbItem) bool {
+type GMemDB[V any] struct {
+	btree.BTreeG[memdbItem[V]]
+	isZero   func(V) bool
+	valueLen func(V) int
+}
+
+func NewGMemDB[V any](
+	isZero func(V) bool,
+	valueLen func(V) int,
+) *GMemDB[V] {
+	return &GMemDB[V]{
+		BTreeG:   *btree.NewBTreeG[memdbItem[V]](KeyItemLess),
+		isZero:   isZero,
+		valueLen: valueLen,
+	}
+}
+
+// NewGMemDBNonConcurrent returns a new BTree which is not concurrency safe.
+func NewGMemDBNonConcurrent[V any](
+	isZero func(V) bool,
+	valueLen func(V) int,
+) *GMemDB[V] {
+	return &GMemDB[V]{
+		BTreeG: *btree.NewBTreeGOptions[memdbItem[V]](KeyItemLess, btree.Options{
+			NoLocks: true,
+		}),
+		isZero:   isZero,
+		valueLen: valueLen,
+	}
+}
+
+func (db *GMemDB[V]) Scan(cb func(key Key, value V) bool) {
+	db.BTreeG.Scan(func(item memdbItem[V]) bool {
 		return cb(item.key, item.value)
 	})
 }
 
-func (db *MemDB) Get(key []byte) []byte {
-	item, ok := db.BTreeG.Get(memdbItem{key: key})
+func (db *GMemDB[V]) Get(key []byte) V {
+	item, ok := db.BTreeG.Get(memdbItem[V]{key: key})
 	if !ok {
-		return nil
+		var empty V
+		return empty
 	}
 	return item.value
 }
 
-func (db *MemDB) Has(key []byte) bool {
-	return db.Get(key) != nil
+func (db *GMemDB[V]) Has(key []byte) bool {
+	return !db.isZero(db.Get(key))
 }
 
-func (db *MemDB) Set(key, value []byte) {
-	if value == nil {
+func (db *GMemDB[V]) Set(key []byte, value V) {
+	if db.isZero(value) {
 		panic("nil value not allowed")
 	}
-	db.BTreeG.Set(memdbItem{key: key, value: value})
+	db.BTreeG.Set(memdbItem[V]{key: key, value: value})
 }
 
-func (db *MemDB) Delete(key []byte) {
-	db.BTreeG.Delete(memdbItem{key: key})
+func (db *GMemDB[V]) Delete(key []byte) {
+	db.BTreeG.Delete(memdbItem[V]{key: key})
 }
 
 // When used as an overlay (e.g. WriteSet), it stores the `nil` value to represent deleted keys,
 // so we return seperate bool value for found status.
-func (db *MemDB) OverlayGet(key Key) (Value, bool) {
-	item, ok := db.BTreeG.Get(memdbItem{key: key})
+func (db *GMemDB[V]) OverlayGet(key Key) (V, bool) {
+	item, ok := db.BTreeG.Get(memdbItem[V]{key: key})
 	if !ok {
-		return nil, false
+		var zero V
+		return zero, false
 	}
 	return item.value, true
 }
 
 // When used as an overlay (e.g. WriteSet), it stores the `nil` value to represent deleted keys,
-func (db *MemDB) OverlaySet(key Key, value Value) {
-	db.BTreeG.Set(memdbItem{key: key, value: value})
+func (db *GMemDB[V]) OverlaySet(key Key, value V) {
+	db.BTreeG.Set(memdbItem[V]{key: key, value: value})
 }
 
-func (db *MemDB) Iterator(start, end []byte) storetypes.Iterator {
+func (db *GMemDB[V]) Iterator(start, end []byte) storetypes.GIterator[V] {
 	return db.iterator(start, end, true)
 }
 
-func (db *MemDB) ReverseIterator(start, end []byte) storetypes.Iterator {
+func (db *GMemDB[V]) ReverseIterator(start, end []byte) storetypes.GIterator[V] {
 	return db.iterator(start, end, false)
 }
 
-func (db *MemDB) iterator(start, end Key, ascending bool) storetypes.Iterator {
+func (db *GMemDB[V]) iterator(start, end Key, ascending bool) storetypes.GIterator[V] {
 	return NewMemDBIterator(start, end, db.Iter(), ascending)
 }
 
-func (db *MemDB) Equal(other *MemDB) bool {
-	// compare with iterators
-	iter1 := db.Iterator(nil, nil)
-	iter2 := other.Iterator(nil, nil)
-	defer iter1.Close()
-	defer iter2.Close()
-
-	for {
-		if !iter1.Valid() && !iter2.Valid() {
-			return true
-		}
-		if !iter1.Valid() || !iter2.Valid() {
-			return false
-		}
-		if !bytes.Equal(iter1.Key(), iter2.Key()) || !bytes.Equal(iter1.Value(), iter2.Value()) {
-			return false
-		}
-		iter1.Next()
-		iter2.Next()
-	}
-}
-
-func (db *MemDB) GetStoreType() storetypes.StoreType {
+func (db *GMemDB[V]) GetStoreType() storetypes.StoreType {
 	return storetypes.StoreTypeIAVL
 }
 
 // CacheWrap implements types.KVStore.
-func (db *MemDB) CacheWrap() storetypes.CacheWrap {
-	return cachekv.NewStore(storetypes.KVStore(db))
+func (db *GMemDB[V]) CacheWrap() storetypes.CacheWrap {
+	return cachekv.NewGStore(db, db.isZero, db.valueLen)
 }
 
-// CacheWrapWithTrace implements types.KVStore.
-func (db *MemDB) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
-	return cachekv.NewStore(tracekv.NewStore(db, w, tc))
+type MemDBIterator[V any] struct {
+	BTreeIteratorG[memdbItem[V]]
 }
 
-type MemDBIterator struct {
-	BTreeIteratorG[memdbItem]
-}
+var _ storetypes.Iterator = (*MemDBIterator[[]byte])(nil)
 
-var _ storetypes.Iterator = (*MemDBIterator)(nil)
-
-func NewMemDBIterator(start, end Key, iter btree.IterG[memdbItem], ascending bool) *MemDBIterator {
-	return &MemDBIterator{*NewBTreeIteratorG(
-		memdbItem{key: start},
-		memdbItem{key: end},
+func NewMemDBIterator[V any](start, end Key, iter btree.IterG[memdbItem[V]], ascending bool) *MemDBIterator[V] {
+	return &MemDBIterator[V]{*NewBTreeIteratorG(
+		memdbItem[V]{key: start},
+		memdbItem[V]{key: end},
 		iter,
 		ascending,
 	)}
 }
 
-func (it *MemDBIterator) Value() []byte {
+func NewNoopIterator[V any](start, end Key, ascending bool) storetypes.GIterator[V] {
+	return &MemDBIterator[V]{BTreeIteratorG[memdbItem[V]]{
+		start:     start,
+		end:       end,
+		ascending: ascending,
+		valid:     false,
+	}}
+}
+
+func (it *MemDBIterator[V]) Value() V {
 	return it.Item().value
 }
 
-type MultiMemDB struct {
-	dbs map[storetypes.StoreKey]*MemDB
+type memdbItem[V any] struct {
+	key   Key
+	value V
 }
 
-func NewMultiMemDB(stores []storetypes.StoreKey) *MultiMemDB {
-	dbs := make(map[storetypes.StoreKey]*MemDB, len(stores))
-	for _, name := range stores {
-		dbs[name] = NewMemDB()
+var _ KeyItem = memdbItem[[]byte]{}
+
+func (item memdbItem[V]) GetKey() []byte {
+	return item.key
+}
+
+type MultiMemDB struct {
+	dbs map[storetypes.StoreKey]storetypes.Store
+}
+
+var _ MultiStore = (*MultiMemDB)(nil)
+
+func NewMultiMemDB(stores map[storetypes.StoreKey]int) *MultiMemDB {
+	dbs := make(map[storetypes.StoreKey]storetypes.Store, len(stores))
+	for name := range stores {
+		switch name.(type) {
+		case *storetypes.ObjectStoreKey:
+			dbs[name] = NewObjMemDB()
+		default:
+			dbs[name] = NewMemDB()
+		}
 	}
 	return &MultiMemDB{
 		dbs: dbs,
 	}
 }
 
-func (mmdb *MultiMemDB) GetDB(store storetypes.StoreKey) *MemDB {
+func (mmdb *MultiMemDB) GetStore(store storetypes.StoreKey) storetypes.Store {
 	return mmdb.dbs[store]
 }
 
 func (mmdb *MultiMemDB) GetKVStore(store storetypes.StoreKey) storetypes.KVStore {
-	return mmdb.GetDB(store)
+	return mmdb.GetStore(store).(storetypes.KVStore)
+}
+
+func (mmdb *MultiMemDB) GetObjKVStore(store storetypes.StoreKey) storetypes.ObjKVStore {
+	return mmdb.GetStore(store).(storetypes.ObjKVStore)
 }

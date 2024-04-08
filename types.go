@@ -22,10 +22,7 @@ func (v TxnVersion) Valid() bool {
 	return v.Index >= 0
 }
 
-type (
-	Key   []byte
-	Value []byte
-)
+type Key []byte
 
 type ReadDescriptor struct {
 	Key Key
@@ -55,16 +52,7 @@ type ReadSet struct {
 	Iterators []IteratorDescriptor
 }
 
-type WriteSet = MemDB
-
-func NewWriteSet() WriteSet {
-	return *NewMemDBNonConcurrent()
-}
-
-type (
-	MultiWriteSet = []WriteSet
-	MultiReadSet  = []ReadSet
-)
+type MultiReadSet = map[int]*ReadSet
 
 type KeyItem interface {
 	GetKey() []byte
@@ -78,5 +66,23 @@ func KeyItemLess[T KeyItem](a, b T) bool {
 type TxExecutor func(TxnIndex, MultiStore)
 
 type MultiStore interface {
+	GetStore(storetypes.StoreKey) storetypes.Store
 	GetKVStore(storetypes.StoreKey) storetypes.KVStore
+	GetObjKVStore(storetypes.StoreKey) storetypes.ObjKVStore
+}
+
+// MVStore is a value type agnostic interface for `MVData`, to keep `MVMemory` value type agnostic.
+type MVStore interface {
+	Delete(Key, TxnIndex)
+	WriteEstimate(Key, TxnIndex)
+	ValidateReadSet(TxnIndex, *ReadSet) bool
+	SnapshotToStore(storetypes.Store)
+}
+
+// MVView is a value type agnostic interface for `MVMemoryView`, to keep `MultiMVMemoryView` value type agnostic.
+type MVView interface {
+	storetypes.Store
+
+	ApplyWriteSet(TxnVersion) Locations
+	ReadSet() *ReadSet
 }

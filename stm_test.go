@@ -72,7 +72,7 @@ func determisticBlock() *MockBlock {
 }
 
 func TestSTM(t *testing.T) {
-	stores := []storetypes.StoreKey{StoreKeyAuth, StoreKeyBank}
+	stores := map[storetypes.StoreKey]int{StoreKeyAuth: 0, StoreKeyBank: 1}
 	testCases := []struct {
 		name      string
 		blk       *MockBlock
@@ -129,20 +129,46 @@ func TestSTM(t *testing.T) {
 			runSequential(crossCheck, tc.blk)
 
 			// check parallel execution matches sequential execution
-			for _, store := range stores {
-				require.True(t, crossCheck.GetDB(store).Equal(storage.GetDB(store)))
+			for store := range stores {
+				require.True(t, StoreEqual(crossCheck.GetKVStore(store), storage.GetKVStore(store)))
 			}
 
 			// check total nonce increased the same amount as the number of transactions
 			var total uint64
-			storage.GetDB(StoreKeyAuth).Scan(func(k Key, v Value) bool {
-				if !bytes.HasPrefix(k, []byte("nonce")) {
-					return true
+			store := storage.GetKVStore(StoreKeyAuth)
+			it := store.Iterator(nil, nil)
+			defer it.Close()
+
+			for ; it.Valid(); it.Next() {
+				if !bytes.HasPrefix(it.Key(), []byte("nonce")) {
+					continue
 				}
-				total += binary.BigEndian.Uint64(v)
-				return true
-			})
+				total += binary.BigEndian.Uint64(it.Value())
+				continue
+			}
 			require.Equal(t, uint64(tc.blk.Size()), total)
 		})
+	}
+}
+
+func StoreEqual(a, b storetypes.KVStore) bool {
+	// compare with iterators
+	iter1 := a.Iterator(nil, nil)
+	iter2 := b.Iterator(nil, nil)
+	defer iter1.Close()
+	defer iter2.Close()
+
+	for {
+		if !iter1.Valid() && !iter2.Valid() {
+			return true
+		}
+		if !iter1.Valid() || !iter2.Valid() {
+			return false
+		}
+		if !bytes.Equal(iter1.Key(), iter2.Key()) || !bytes.Equal(iter1.Value(), iter2.Value()) {
+			return false
+		}
+		iter1.Next()
+		iter2.Next()
 	}
 }
