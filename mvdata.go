@@ -62,7 +62,6 @@ func (d *MVData) Read(key Key, txn TxnIndex) (Value, TxnVersion, bool) {
 		return nil, InvalidTxnVersion, false
 	}
 
-	// index order is reversed,
 	// find the closing txn that's less than the given txn
 	item, ok := seekClosestTxn(tree, txn)
 	if !ok {
@@ -115,8 +114,7 @@ func (d *MVData) Snapshot() (snapshot []KVPair) {
 
 func (d *MVData) SnapshotTo(cb func(pair KVPair) bool) {
 	d.Scan(func(outer dataItem) bool {
-		// index order is reversed, `Min` is the latest
-		item, ok := outer.Tree.Min()
+		item, ok := outer.Tree.Max()
 		if !ok {
 			return true
 		}
@@ -153,8 +151,7 @@ type secondaryDataItem struct {
 }
 
 func secondaryLesser(a, b secondaryDataItem) bool {
-	// reverse the order
-	return a.Index > b.Index
+	return a.Index < b.Index
 }
 
 func (item secondaryDataItem) Version() TxnVersion {
@@ -162,7 +159,6 @@ func (item secondaryDataItem) Version() TxnVersion {
 }
 
 // seekClosestTxn returns the closest txn that's less than the given txn.
-// NOTE: the tx index order is reversed.
 func seekClosestTxn(tree *BTree[secondaryDataItem], txn TxnIndex) (secondaryDataItem, bool) {
-	return tree.Seek(secondaryDataItem{Index: txn - 1})
+	return tree.ReverseSeek(secondaryDataItem{Index: txn - 1})
 }

@@ -72,23 +72,20 @@ func (bt *BTree[T]) Scan(iter func(item T) bool) {
 	bt.Load().Scan(iter)
 }
 
-func (bt *BTree[T]) Min() (T, bool) {
-	return bt.Load().Min()
+func (bt *BTree[T]) Max() (T, bool) {
+	return bt.Load().Max()
 }
 
 func (bt *BTree[T]) Iter() btree.IterG[T] {
 	return bt.Load().Iter()
 }
 
-func (bt *BTree[T]) Seek(item T) (result T, ok bool) {
-	iter := bt.Iter()
-	if !iter.Seek(item) {
-		iter.Release()
-		return
-	}
-
-	result = iter.Item()
-	ok = true
-	iter.Release()
+// ReverseSeek returns the first item that is less than or equal to the pivot
+func (bt *BTree[T]) ReverseSeek(pivot T) (result T, ok bool) {
+	bt.Load().Descend(pivot, func(item T) bool {
+		result = item
+		ok = true
+		return false
+	})
 	return
 }
