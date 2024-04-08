@@ -1,4 +1,4 @@
-module github.com/yihuang/go-block-stm
+module github.com/crypto-org-chain/go-block-stm
 
 go 1.21
 
