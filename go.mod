@@ -70,5 +70,5 @@ require (
 
 replace (
 	cosmossdk.io/store => github.com/crypto-org-chain/cosmos-sdk/store v0.0.0-20240402064432-829c54275894
-	github.com/tidwall/btree => github.com/yihuang/btree v0.0.0-20240318010431-d365682df9a7
+	github.com/tidwall/btree => github.com/crypto-org-chain/btree v0.0.0-20240406140148-2687063b042c
 )
