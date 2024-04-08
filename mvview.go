@@ -1,54 +1,94 @@
 package block_stm
 
 import (
-	"io"
-
 	"cosmossdk.io/store/cachekv"
-	"cosmossdk.io/store/tracekv"
 	storetypes "cosmossdk.io/store/types"
 )
 
-// MVMemoryView wraps `MVMemory` for execution of a single transaction.
-type MVMemoryView struct {
-	storage   storetypes.KVStore
-	mvMemory  *MVMemory
+var (
+	_ storetypes.KVStore    = (*GMVMemoryView[[]byte])(nil)
+	_ storetypes.ObjKVStore = (*GMVMemoryView[any])(nil)
+	_ MVView                = (*GMVMemoryView[[]byte])(nil)
+	_ MVView                = (*GMVMemoryView[any])(nil)
+)
+
+// GMVMemoryView[V] wraps `MVMemory` for execution of a single transaction.
+type GMVMemoryView[V any] struct {
+	storage   storetypes.GKVStore[V]
+	mvData    *GMVData[V]
 	scheduler *Scheduler
 	store     int
 
 	txn      TxnIndex
-	readSet  ReadSet
-	writeSet WriteSet
+	readSet  *ReadSet
+	writeSet *GMemDB[V]
 }
 
-var _ storetypes.KVStore = (*MVMemoryView)(nil)
-
-func NewMVMemoryView(store int, storage storetypes.KVStore, mvMemory *MVMemory, schedule *Scheduler, txn TxnIndex) *MVMemoryView {
-	return &MVMemoryView{
-		store:     store,
-		storage:   storage,
-		mvMemory:  mvMemory,
-		scheduler: schedule,
-		txn:       txn,
-		writeSet:  NewWriteSet(),
+func NewMVView(store int, storage storetypes.Store, mvData MVStore, scheduler *Scheduler, txn TxnIndex) MVView {
+	switch data := mvData.(type) {
+	case *GMVData[any]:
+		return NewGMVMemoryView(store, storage.(storetypes.ObjKVStore), data, scheduler, txn)
+	case *GMVData[[]byte]:
+		return NewGMVMemoryView(store, storage.(storetypes.KVStore), data, scheduler, txn)
+	default:
+		panic("unsupported value type")
 	}
 }
 
-func (s *MVMemoryView) waitFor(txn TxnIndex) {
+func NewGMVMemoryView[V any](store int, storage storetypes.GKVStore[V], mvData *GMVData[V], scheduler *Scheduler, txn TxnIndex) *GMVMemoryView[V] {
+	return &GMVMemoryView[V]{
+		store:     store,
+		storage:   storage,
+		mvData:    mvData,
+		scheduler: scheduler,
+		txn:       txn,
+		readSet:   new(ReadSet),
+	}
+}
+
+func (s *GMVMemoryView[V]) init() {
+	if s.writeSet == nil {
+		s.writeSet = NewGMemDBNonConcurrent(s.mvData.isZero, s.mvData.valueLen)
+	}
+}
+
+func (s *GMVMemoryView[V]) waitFor(txn TxnIndex) {
 	cond := s.scheduler.WaitForDependency(s.txn, txn)
 	if cond != nil {
 		cond.Wait()
 	}
 }
 
-func (s *MVMemoryView) Get(key []byte) []byte {
-	if value, found := s.writeSet.OverlayGet(key); found {
-		// value written by this txn
-		// nil value means deleted
-		return value
+func (s *GMVMemoryView[V]) ApplyWriteSet(version TxnVersion) Locations {
+	if s.writeSet == nil || s.writeSet.Len() == 0 {
+		return nil
+	}
+
+	newLocations := make([]Key, 0, s.writeSet.Len())
+	s.writeSet.Scan(func(key Key, value V) bool {
+		s.mvData.Write(key, value, version)
+		newLocations = append(newLocations, key)
+		return true
+	})
+
+	return newLocations
+}
+
+func (s *GMVMemoryView[V]) ReadSet() *ReadSet {
+	return s.readSet
+}
+
+func (s *GMVMemoryView[V]) Get(key []byte) V {
+	if s.writeSet != nil {
+		if value, found := s.writeSet.OverlayGet(key); found {
+			// value written by this txn
+			// nil value means deleted
+			return value
+		}
 	}
 
 	for {
-		value, version, estimate := s.mvMemory.Read(s.store, key, s.txn)
+		value, version, estimate := s.mvData.Read(key, s.txn)
 		if estimate {
 			// read ESTIMATE mark, wait for the blocking txn to finish
 			s.waitFor(version.Index)
@@ -65,42 +105,50 @@ func (s *MVMemoryView) Get(key []byte) []byte {
 	}
 }
 
-func (s *MVMemoryView) Has(key []byte) bool {
-	return s.Get(key) != nil
+func (s *GMVMemoryView[V]) Has(key []byte) bool {
+	return !s.mvData.isZero(s.Get(key))
 }
 
-func (s *MVMemoryView) Set(key, value []byte) {
-	if value == nil {
+func (s *GMVMemoryView[V]) Set(key []byte, value V) {
+	if s.mvData.isZero(value) {
 		panic("nil value is not allowed")
 	}
+	s.init()
 	s.writeSet.OverlaySet(key, value)
 }
 
-func (s *MVMemoryView) Delete(key []byte) {
-	s.writeSet.OverlaySet(key, nil)
+func (s *GMVMemoryView[V]) Delete(key []byte) {
+	var empty V
+	s.init()
+	s.writeSet.OverlaySet(key, empty)
 }
 
-func (s *MVMemoryView) Iterator(start, end []byte) storetypes.Iterator {
+func (s *GMVMemoryView[V]) Iterator(start, end []byte) storetypes.GIterator[V] {
 	return s.iterator(IteratorOptions{Start: start, End: end, Ascending: true})
 }
 
-func (s *MVMemoryView) ReverseIterator(start, end []byte) storetypes.Iterator {
+func (s *GMVMemoryView[V]) ReverseIterator(start, end []byte) storetypes.GIterator[V] {
 	return s.iterator(IteratorOptions{Start: start, End: end, Ascending: false})
 }
 
-func (s *MVMemoryView) iterator(opts IteratorOptions) storetypes.Iterator {
-	mvIter := s.mvMemory.Iterator(opts, s.store, s.txn, s.waitFor)
+func (s *GMVMemoryView[V]) iterator(opts IteratorOptions) storetypes.GIterator[V] {
+	mvIter := s.mvData.Iterator(opts, s.txn, s.waitFor)
 
-	var parentIter, wsIter storetypes.Iterator
+	var parentIter, wsIter storetypes.GIterator[V]
+
+	if s.writeSet == nil {
+		wsIter = NewNoopIterator[V](opts.Start, opts.End, opts.Ascending)
+	} else {
+		wsIter = s.writeSet.iterator(opts.Start, opts.End, opts.Ascending)
+	}
+
 	if opts.Ascending {
-		wsIter = s.writeSet.Iterator(opts.Start, opts.End)
 		parentIter = s.storage.Iterator(opts.Start, opts.End)
 	} else {
-		wsIter = s.writeSet.ReverseIterator(opts.Start, opts.End)
 		parentIter = s.storage.ReverseIterator(opts.Start, opts.End)
 	}
 
-	onClose := func(iter storetypes.Iterator) {
+	onClose := func(iter storetypes.GIterator[V]) {
 		reads := mvIter.Reads()
 
 		var stopKey Key
@@ -126,24 +174,20 @@ func (s *MVMemoryView) iterator(opts IteratorOptions) storetypes.Iterator {
 
 	// three-way merge iterator
 	return NewCacheMergeIterator(
-		NewCacheMergeIterator(parentIter, mvIter, opts.Ascending, nil),
+		NewCacheMergeIterator(parentIter, mvIter, opts.Ascending, nil, s.mvData.isZero),
 		wsIter,
 		opts.Ascending,
 		onClose,
+		s.mvData.isZero,
 	)
 }
 
-// CacheWrap implements types.KVStore.
-func (s *MVMemoryView) CacheWrap() storetypes.CacheWrap {
-	return cachekv.NewStore(storetypes.KVStore(s))
+// CacheWrap implements types.Store.
+func (s *GMVMemoryView[V]) CacheWrap() storetypes.CacheWrap {
+	return cachekv.NewGStore(s, s.mvData.isZero, s.mvData.valueLen)
 }
 
-// CacheWrapWithTrace implements types.KVStore.
-func (s *MVMemoryView) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
-	return cachekv.NewStore(tracekv.NewStore(s, w, tc))
-}
-
-// GetStoreType implements types.KVStore.
-func (s *MVMemoryView) GetStoreType() storetypes.StoreType {
-	return storetypes.StoreTypeIAVL
+// GetStoreType implements types.Store.
+func (s *GMVMemoryView[V]) GetStoreType() storetypes.StoreType {
+	return s.storage.GetStoreType()
 }

@@ -2,19 +2,16 @@ package block_stm
 
 import (
 	"context"
-
-	storetypes "cosmossdk.io/store/types"
 )
 
 // Executor fields are not mutated during execution.
 type Executor struct {
-	ctx        context.Context       // context for cancellation
-	blockSize  int                   // total number of transactions to execute
-	stores     []storetypes.StoreKey // store names
-	scheduler  *Scheduler            // scheduler for task management
-	storage    MultiStore            // storage for the executor
-	txExecutor TxExecutor            // callback to actually execute a transaction
-	mvMemory   *MVMemory             // multi-version memory for the executor
+	ctx        context.Context // context for cancellation
+	blockSize  int             // total number of transactions to execute
+	scheduler  *Scheduler      // scheduler for task management
+	storage    MultiStore      // storage for the executor
+	txExecutor TxExecutor      // callback to actually execute a transaction
+	mvMemory   *MVMemory       // multi-version memory for the executor
 
 	// index of the executor, used for debugging output
 	i int
@@ -23,7 +20,6 @@ type Executor struct {
 func NewExecutor(
 	ctx context.Context,
 	blockSize int,
-	stores []storetypes.StoreKey,
 	scheduler *Scheduler,
 	storage MultiStore,
 	txExecutor TxExecutor,
@@ -33,7 +29,6 @@ func NewExecutor(
 	return &Executor{
 		ctx:        ctx,
 		blockSize:  blockSize,
-		stores:     stores,
 		scheduler:  scheduler,
 		storage:    storage,
 		txExecutor: txExecutor,
@@ -73,8 +68,8 @@ func (e *Executor) Run() {
 
 func (e *Executor) TryExecute(version TxnVersion) (TxnVersion, TaskKind) {
 	e.scheduler.executedTxns.Add(1)
-	readSet, writeSet := e.execute(version.Index)
-	wroteNewLocation := e.mvMemory.Record(version, readSet, writeSet)
+	view := e.execute(version.Index)
+	wroteNewLocation := e.mvMemory.Record(version, view)
 	return e.scheduler.FinishExecution(version, wroteNewLocation)
 }
 
@@ -88,8 +83,8 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 	return e.scheduler.FinishValidation(version.Index, aborted)
 }
 
-func (e *Executor) execute(txn TxnIndex) (MultiReadSet, MultiWriteSet) {
-	view := NewMultiMVMemoryView(e.stores, e.storage, e.mvMemory, e.scheduler, txn)
+func (e *Executor) execute(txn TxnIndex) *MultiMVMemoryView {
+	view := e.mvMemory.View(txn, e.storage, e.scheduler)
 	e.txExecutor(txn, view)
-	return view.Result()
+	return view
 }

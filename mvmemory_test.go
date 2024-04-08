@@ -7,29 +7,32 @@ import (
 	"github.com/test-go/testify/require"
 )
 
-func BuildWriteSet(pairs ...KVPair) WriteSet {
-	ws := NewWriteSet()
-	for _, pair := range pairs {
-		ws.Set(pair.Key, pair.Value)
-	}
-	return ws
-}
-
 func TestMVMemoryRecord(t *testing.T) {
-	stores := []storetypes.StoreKey{StoreKeyAuth}
+	stores := map[storetypes.StoreKey]int{StoreKeyAuth: 0}
+	storage := NewMultiMemDB(stores)
 	mv := NewMVMemory(16, stores)
+	scheduler := NewScheduler(16)
 
+	var views []*MultiMVMemoryView
 	for i := TxnIndex(0); i < 3; i++ {
-		wroteNewLocation := mv.Record(TxnVersion{i, 0}, MultiReadSet{ReadSet{Reads: []ReadDescriptor{
-			{Key("a"), InvalidTxnVersion},
-			{Key("d"), InvalidTxnVersion},
-		}}}, MultiWriteSet{BuildWriteSet(
-			KVPair{Key("a"), Value("1")},
-			KVPair{Key("b"), Value("1")},
-			KVPair{Key("c"), Value("1")},
-		)})
+		version := TxnVersion{i, 0}
+		view := mv.View(version.Index, storage, scheduler)
+		store := view.GetKVStore(StoreKeyAuth)
+
+		_ = store.Get([]byte("a"))
+		_ = store.Get([]byte("d"))
+		store.Set([]byte("a"), []byte("1"))
+		store.Set([]byte("b"), []byte("1"))
+		store.Set([]byte("c"), []byte("1"))
+
+		views = append(views, view)
+	}
+
+	for i, view := range views {
+		wroteNewLocation := mv.Record(TxnVersion{TxnIndex(i), 0}, view)
 		require.True(t, wroteNewLocation)
 	}
+
 	require.True(t, mv.ValidateReadSet(0))
 	require.False(t, mv.ValidateReadSet(1))
 	require.False(t, mv.ValidateReadSet(2))
@@ -38,70 +41,99 @@ func TestMVMemoryRecord(t *testing.T) {
 	mv.ConvertWritesToEstimates(1)
 	mv.ConvertWritesToEstimates(2)
 
-	wroteNewLocation := mv.Record(TxnVersion{3, 1}, MultiReadSet{ReadSet{Reads: []ReadDescriptor{
-		// simulate a read of a key that's ESTIMATE
-		{Key("a"), TxnVersion{2, 1}},
-	}}}, MultiWriteSet{BuildWriteSet()})
-	require.False(t, wroteNewLocation)
-	require.False(t, mv.ValidateReadSet(3))
+	resultCh := make(chan struct{}, 1)
+	go func() {
+		view := mv.View(3, storage, scheduler)
+		store := view.GetKVStore(StoreKeyAuth)
+		// will wait for tx 2
+		store.Get([]byte("a"))
+		wroteNewLocation := mv.Record(TxnVersion{3, 1}, view)
+		require.False(t, wroteNewLocation)
+		require.True(t, mv.ValidateReadSet(3))
+		resultCh <- struct{}{}
+	}()
 
-	value, version, estimate := mv.Read(0, Key("a"), 1)
-	require.False(t, estimate)
-	require.Equal(t, Value("1"), value)
-	require.Equal(t, TxnVersion{0, 0}, version)
+	{
+		data := mv.GetMVStore(0).(*MVData)
+		value, version, estimate := data.Read(Key("a"), 1)
+		require.False(t, estimate)
+		require.Equal(t, []byte("1"), value)
+		require.Equal(t, TxnVersion{0, 0}, version)
 
-	_, version, estimate = mv.Read(0, Key("a"), 2)
-	require.True(t, estimate)
-	require.Equal(t, TxnIndex(1), version.Index)
+		_, version, estimate = data.Read(Key("a"), 2)
+		require.True(t, estimate)
+		require.Equal(t, TxnIndex(1), version.Index)
 
-	_, version, estimate = mv.Read(0, Key("a"), 3)
-	require.True(t, estimate)
-	require.Equal(t, TxnIndex(2), version.Index)
+		_, version, estimate = data.Read(Key("a"), 3)
+		require.True(t, estimate)
+		require.Equal(t, TxnIndex(2), version.Index)
+	}
 
 	// rerun tx 1
-	wroteNewLocation = mv.Record(TxnVersion{1, 1}, MultiReadSet{ReadSet{Reads: []ReadDescriptor{
-		{Key("a"), TxnVersion{0, 0}},
-		{Key("d"), InvalidTxnVersion},
-	}}}, MultiWriteSet{BuildWriteSet(
-		KVPair{Key("a"), Value("2")},
-		KVPair{Key("b"), Value("2")},
-		KVPair{Key("c"), Value("2")},
-	)})
-	require.False(t, wroteNewLocation)
-	require.True(t, mv.ValidateReadSet(1))
+	{
+		view := mv.View(1, storage, scheduler)
+		store := view.GetKVStore(StoreKeyAuth)
+
+		_ = store.Get([]byte("a"))
+		_ = store.Get([]byte("d"))
+		store.Set([]byte("a"), []byte("2"))
+		store.Set([]byte("b"), []byte("2"))
+		store.Set([]byte("c"), []byte("2"))
+
+		wroteNewLocation := mv.Record(TxnVersion{1, 1}, view)
+		require.False(t, wroteNewLocation)
+		require.True(t, mv.ValidateReadSet(1))
+	}
 
 	// rerun tx 2
 	// don't write `c` this time
-	wroteNewLocation = mv.Record(TxnVersion{2, 1}, MultiReadSet{ReadSet{Reads: []ReadDescriptor{
-		{Key("a"), TxnVersion{1, 1}},
-		{Key("d"), InvalidTxnVersion},
-	}}}, MultiWriteSet{BuildWriteSet(
-		KVPair{Key("a"), Value("3")},
-		KVPair{Key("b"), Value("3")},
-	)})
-	require.False(t, wroteNewLocation)
-	require.True(t, mv.ValidateReadSet(2))
+	{
+		version := TxnVersion{2, 1}
+		view := mv.View(version.Index, storage, scheduler)
+		store := view.GetKVStore(StoreKeyAuth)
+
+		_ = store.Get([]byte("a"))
+		_ = store.Get([]byte("d"))
+		store.Set([]byte("a"), []byte("3"))
+		store.Set([]byte("b"), []byte("3"))
+
+		wroteNewLocation := mv.Record(version, view)
+		require.False(t, wroteNewLocation)
+		require.True(t, mv.ValidateReadSet(2))
+
+		scheduler.FinishExecution(version, wroteNewLocation)
+
+		// wait for dependency to finish
+		<-resultCh
+	}
 
 	// run tx 3
-	wroteNewLocation = mv.Record(TxnVersion{3, 1}, MultiReadSet{ReadSet{Reads: []ReadDescriptor{
-		// simulate a read of a key that's deleted later.
-		{Key("d"), TxnVersion{1, 1}},
-	}}}, MultiWriteSet{BuildWriteSet()})
-	require.False(t, wroteNewLocation)
-	require.False(t, mv.ValidateReadSet(3))
+	{
+		view := mv.View(3, storage, scheduler)
+		store := view.GetKVStore(StoreKeyAuth)
 
-	value, version, estimate = mv.Read(0, Key("a"), 2)
-	require.False(t, estimate)
-	require.Equal(t, Value("2"), value)
-	require.Equal(t, TxnVersion{1, 1}, version)
+		_ = store.Get([]byte("a"))
 
-	value, version, estimate = mv.Read(0, Key("a"), 3)
-	require.False(t, estimate)
-	require.Equal(t, Value("3"), value)
-	require.Equal(t, TxnVersion{2, 1}, version)
+		wroteNewLocation := mv.Record(TxnVersion{3, 1}, view)
+		require.False(t, wroteNewLocation)
+		require.True(t, mv.ValidateReadSet(3))
+	}
 
-	value, version, estimate = mv.Read(0, Key("c"), 3)
-	require.False(t, estimate)
-	require.Equal(t, Value("2"), value)
-	require.Equal(t, TxnVersion{1, 1}, version)
+	{
+		data := mv.GetMVStore(0).(*MVData)
+		value, version, estimate := data.Read(Key("a"), 2)
+		require.False(t, estimate)
+		require.Equal(t, []byte("2"), value)
+		require.Equal(t, TxnVersion{1, 1}, version)
+
+		value, version, estimate = data.Read(Key("a"), 3)
+		require.False(t, estimate)
+		require.Equal(t, []byte("3"), value)
+		require.Equal(t, TxnVersion{2, 1}, version)
+
+		value, version, estimate = data.Read(Key("c"), 3)
+		require.False(t, estimate)
+		require.Equal(t, []byte("2"), value)
+		require.Equal(t, TxnVersion{1, 1}, version)
+	}
 }

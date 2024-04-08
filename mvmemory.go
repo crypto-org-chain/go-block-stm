@@ -9,21 +9,21 @@ import (
 type (
 	// keys are sorted
 	Locations      []Key
-	MultiLocations []Locations
+	MultiLocations map[int]Locations
 )
 
 // MVMemory implements `Algorithm 2 The MVMemory module`
 type MVMemory struct {
-	stores               []storetypes.StoreKey
-	data                 []MVData
+	stores               map[storetypes.StoreKey]int
+	data                 []MVStore
 	lastWrittenLocations []atomic.Pointer[MultiLocations]
 	lastReadSet          []atomic.Pointer[MultiReadSet]
 }
 
-func NewMVMemory(block_size int, stores []storetypes.StoreKey) *MVMemory {
-	data := make([]MVData, len(stores))
-	for i := 0; i < len(stores); i++ {
-		data[i] = *NewMVData()
+func NewMVMemory(block_size int, stores map[storetypes.StoreKey]int) *MVMemory {
+	data := make([]MVStore, len(stores))
+	for key, i := range stores {
+		data[i] = NewMVStore(key)
 	}
 	return &MVMemory{
 		stores:               stores,
@@ -33,24 +33,10 @@ func NewMVMemory(block_size int, stores []storetypes.StoreKey) *MVMemory {
 	}
 }
 
-func (mv *MVMemory) Record(version TxnVersion, rs MultiReadSet, ws MultiWriteSet) bool {
-	newLocations := make(MultiLocations, len(mv.stores))
-	for i, writeSet := range ws {
-		if writeSet.Len() == 0 {
-			continue
-		}
-
-		newLocations[i] = make([]Key, 0, writeSet.Len())
-
-		// apply_write_set
-		writeSet.Scan(func(key Key, value Value) bool {
-			mv.data[i].Write(key, value, version)
-			newLocations[i] = append(newLocations[i], key)
-			return true
-		})
-	}
+func (mv *MVMemory) Record(version TxnVersion, view *MultiMVMemoryView) bool {
+	newLocations := view.ApplyWriteSet(version)
 	wroteNewLocation := mv.rcuUpdateWrittenLocations(version.Index, newLocations)
-	mv.lastReadSet[version.Index].Store(&rs)
+	mv.lastReadSet[version.Index].Store(view.ReadSet())
 	return wroteNewLocation
 }
 
@@ -59,16 +45,16 @@ func (mv *MVMemory) rcuUpdateWrittenLocations(txn TxnIndex, newLocations MultiLo
 	var wroteNewLocation bool
 
 	prevLocations := mv.readLastWrittenLocations(txn)
-	for i := range mv.stores {
-		if i >= len(prevLocations) {
-			// special case, prevLocations is not initialized
+	for i, newLoc := range newLocations {
+		prevLoc, ok := prevLocations[i]
+		if !ok {
 			if len(newLocations[i]) > 0 {
 				wroteNewLocation = true
 			}
 			continue
 		}
 
-		DiffOrderedList(prevLocations[i], newLocations[i], func(key Key, is_new bool) bool {
+		DiffOrderedList(prevLoc, newLoc, func(key Key, is_new bool) bool {
 			if is_new {
 				wroteNewLocation = true
 			} else {
@@ -89,41 +75,15 @@ func (mv *MVMemory) ConvertWritesToEstimates(txn TxnIndex) {
 	}
 }
 
-func (mv *MVMemory) Read(store int, key Key, txn TxnIndex) (Value, TxnVersion, bool) {
-	return mv.data[store].Read(key, txn)
-}
-
 func (mv *MVMemory) ValidateReadSet(txn TxnIndex) bool {
 	// Invariant: at least one `Record` call has been made for `txn`
 	rs := *mv.lastReadSet[txn].Load()
 	for store, readSet := range rs {
-		for _, desc := range readSet.Reads {
-			_, version, estimate := mv.Read(store, desc.Key, txn)
-			if estimate {
-				// previously read entry from data, now ESTIMATE
-				return false
-			}
-			if version != desc.Version {
-				// previously read entry from data, now NOT_FOUND,
-				// or read some entry, but not the same version as before
-				return false
-			}
-		}
-
-		for _, desc := range readSet.Iterators {
-			if !mv.data[store].ValidateIterator(desc, txn) {
-				return false
-			}
+		if !mv.data[store].ValidateReadSet(txn, readSet) {
+			return false
 		}
 	}
 	return true
-}
-
-func (mv *MVMemory) Iterator(
-	opts IteratorOptions, store int, txn TxnIndex,
-	waitFn func(TxnIndex),
-) *MVIterator {
-	return NewMVIterator(opts, txn, mv.data[store].Iter(), waitFn)
 }
 
 func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) MultiLocations {
@@ -135,25 +95,16 @@ func (mv *MVMemory) readLastWrittenLocations(txn TxnIndex) MultiLocations {
 }
 
 func (mv *MVMemory) WriteSnapshot(storage MultiStore) {
-	for i, name := range mv.stores {
-		store := storage.GetKVStore(name)
-		mv.data[i].SnapshotTo(func(pair KVPair) bool {
-			if pair.Value == nil {
-				store.Delete(pair.Key)
-			} else {
-				store.Set(pair.Key, pair.Value)
-			}
-			return true
-		})
+	for name, i := range mv.stores {
+		mv.data[i].SnapshotToStore(storage.GetStore(name))
 	}
 }
 
-func WriteSnapshot(storage storetypes.KVStore, snapshot []KVPair) {
-	for _, pair := range snapshot {
-		if pair.Value == nil {
-			storage.Delete(pair.Key)
-		} else {
-			storage.Set(pair.Key, pair.Value)
-		}
-	}
+// View creates a view for a particular transaction.
+func (mv *MVMemory) View(txn TxnIndex, storage MultiStore, scheduler *Scheduler) *MultiMVMemoryView {
+	return NewMultiMVMemoryView(mv.stores, storage, mv, scheduler, txn)
+}
+
+func (mv *MVMemory) GetMVStore(i int) MVStore {
+	return mv.data[i]
 }
