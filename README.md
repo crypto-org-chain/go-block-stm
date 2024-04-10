@@ -43,4 +43,5 @@ The internal data structures are also adapted with multiple stores in mind.
 ### Concurrency Friendly `Has` Operation
 
 The `Has(key)` operation is usually implemeneted as `Get(key) != nil` naively, but it can be implemented more friendly
-to concurrency than `Get` operation, because it only observe the existence status of the key, not the content of the value ifself, so we treat it differently, `Get` operation is validated by checking the version, but `Has` operation will validates the value existence itself. So for example, if a key is updated by another transaction, it won't abort the transaction that only observed the key with `Has` operation, because the existence status is not changed.
+to concurrency than `Get` operation, because it only observes the existence status of the key rather than the value content, so we can take advantage of that.
+We validates `Get` operation by checking if the value is updated by a different version, but `Has` operation is validated by checking whether the existence of the key is changed. So for example, if a key is updated with a different version, it won't abort the transaction that only observed the key with `Has` operation, because the existence status is not changed.
