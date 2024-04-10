@@ -30,6 +30,11 @@ type ReadDescriptor struct {
 	Version TxnVersion
 }
 
+type HasDescriptor struct {
+	Key    Key
+	Exists bool
+}
+
 type IteratorOptions struct {
 	// [Start, End) is the range of the iterator
 	Start     Key
@@ -49,6 +54,7 @@ type IteratorDescriptor struct {
 
 type ReadSet struct {
 	Reads     []ReadDescriptor
+	Hases     []HasDescriptor
 	Iterators []IteratorDescriptor
 }
 
