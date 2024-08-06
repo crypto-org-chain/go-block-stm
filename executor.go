@@ -7,9 +7,7 @@ import (
 // Executor fields are not mutated during execution.
 type Executor struct {
 	ctx        context.Context // context for cancellation
-	blockSize  int             // total number of transactions to execute
 	scheduler  *Scheduler      // scheduler for task management
-	storage    MultiStore      // storage for the executor
 	txExecutor TxExecutor      // callback to actually execute a transaction
 	mvMemory   *MVMemory       // multi-version memory for the executor
 
@@ -19,18 +17,14 @@ type Executor struct {
 
 func NewExecutor(
 	ctx context.Context,
-	blockSize int,
 	scheduler *Scheduler,
-	storage MultiStore,
 	txExecutor TxExecutor,
 	mvMemory *MVMemory,
 	i int,
 ) *Executor {
 	return &Executor{
 		ctx:        ctx,
-		blockSize:  blockSize,
 		scheduler:  scheduler,
-		storage:    storage,
 		txExecutor: txExecutor,
 		mvMemory:   mvMemory,
 		i:          i,
@@ -84,7 +78,7 @@ func (e *Executor) NeedsReexecution(version TxnVersion) (TxnVersion, TaskKind) {
 }
 
 func (e *Executor) execute(txn TxnIndex) *MultiMVMemoryView {
-	view := e.mvMemory.View(txn, e.storage, e.scheduler)
+	view := e.mvMemory.View(txn)
 	e.txExecutor(txn, view)
 	return view
 }

@@ -14,18 +14,25 @@ type (
 
 // MVMemory implements `Algorithm 2 The MVMemory module`
 type MVMemory struct {
+	storage              MultiStore
+	scheduler            *Scheduler
 	stores               map[storetypes.StoreKey]int
 	data                 []MVStore
 	lastWrittenLocations []atomic.Pointer[MultiLocations]
 	lastReadSet          []atomic.Pointer[MultiReadSet]
 }
 
-func NewMVMemory(block_size int, stores map[storetypes.StoreKey]int) *MVMemory {
+func NewMVMemory(
+	block_size int, stores map[storetypes.StoreKey]int,
+	storage MultiStore, scheduler *Scheduler,
+) *MVMemory {
 	data := make([]MVStore, len(stores))
 	for key, i := range stores {
 		data[i] = NewMVStore(key)
 	}
 	return &MVMemory{
+		storage:              storage,
+		scheduler:            scheduler,
 		stores:               stores,
 		data:                 data,
 		lastWrittenLocations: make([]atomic.Pointer[MultiLocations], block_size),
@@ -101,8 +108,13 @@ func (mv *MVMemory) WriteSnapshot(storage MultiStore) {
 }
 
 // View creates a view for a particular transaction.
-func (mv *MVMemory) View(txn TxnIndex, storage MultiStore, scheduler *Scheduler) *MultiMVMemoryView {
-	return NewMultiMVMemoryView(mv.stores, storage, mv, scheduler, txn)
+func (mv *MVMemory) View(txn TxnIndex) *MultiMVMemoryView {
+	return NewMultiMVMemoryView(mv.stores, mv.newMVView, txn)
+}
+
+func (mv *MVMemory) newMVView(name storetypes.StoreKey, txn TxnIndex) MVView {
+	i := mv.stores[name]
+	return NewMVView(i, mv.storage.GetStore(name), mv.GetMVStore(i), mv.scheduler, txn)
 }
 
 func (mv *MVMemory) GetMVStore(i int) MVStore {

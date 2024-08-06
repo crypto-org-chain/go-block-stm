@@ -2,37 +2,35 @@ package block_stm
 
 import storetypes "cosmossdk.io/store/types"
 
+const ViewsPreAllocate = 4
+
 // MultiMVMemoryView don't need to be thread-safe, there's a dedicated instance for each tx execution.
 type MultiMVMemoryView struct {
-	stores   map[storetypes.StoreKey]int
-	views    map[storetypes.StoreKey]MVView
-	initView func(storetypes.StoreKey) MVView
+	stores    map[storetypes.StoreKey]int
+	views     map[storetypes.StoreKey]MVView
+	newMVView func(storetypes.StoreKey, TxnIndex) MVView
+	txn       TxnIndex
 }
 
 var _ MultiStore = (*MultiMVMemoryView)(nil)
 
 func NewMultiMVMemoryView(
 	stores map[storetypes.StoreKey]int,
-	storage MultiStore,
-	mvMemory *MVMemory,
-	schedule *Scheduler,
+	newMVView func(storetypes.StoreKey, TxnIndex) MVView,
 	txn TxnIndex,
 ) *MultiMVMemoryView {
-	initView := func(name storetypes.StoreKey) MVView {
-		i := stores[name]
-		return NewMVView(i, storage.GetStore(name), mvMemory.GetMVStore(i), schedule, txn)
-	}
 	return &MultiMVMemoryView{
-		stores:   stores,
-		views:    make(map[storetypes.StoreKey]MVView),
-		initView: initView,
+		stores:    stores,
+		views:     make(map[storetypes.StoreKey]MVView, ViewsPreAllocate),
+		newMVView: newMVView,
+		txn:       txn,
 	}
 }
 
 func (mv *MultiMVMemoryView) getViewOrInit(name storetypes.StoreKey) MVView {
 	view, ok := mv.views[name]
 	if !ok {
-		view = mv.initView(name)
+		view = mv.newMVView(name, mv.txn)
 		mv.views[name] = view
 	}
 	return view
