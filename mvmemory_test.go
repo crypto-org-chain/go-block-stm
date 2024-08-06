@@ -138,7 +138,7 @@ func TestMVMemoryRecord(t *testing.T) {
 	}
 }
 
-func TestMVMemoryDebug(t *testing.T) {
+func TestMVMemoryDelete(t *testing.T) {
 	nonceKey, balanceKey := []byte("nonce"), []byte("balance")
 
 	stores := map[storetypes.StoreKey]int{StoreKeyAuth: 0, StoreKeyBank: 1}
