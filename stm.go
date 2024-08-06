@@ -27,12 +27,12 @@ func ExecuteBlock(
 
 	// Create a new scheduler
 	scheduler := NewScheduler(blockSize)
-	mvMemory := NewMVMemory(blockSize, stores)
+	mvMemory := NewMVMemory(blockSize, stores, storage, scheduler)
 
 	var wg sync.WaitGroup
 	wg.Add(executors)
 	for i := 0; i < executors; i++ {
-		e := NewExecutor(ctx, blockSize, scheduler, storage, txExecutor, mvMemory, i)
+		e := NewExecutor(ctx, scheduler, txExecutor, mvMemory, i)
 		go func() {
 			defer wg.Done()
 			e.Run()

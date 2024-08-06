@@ -10,13 +10,13 @@ import (
 func TestMVMemoryRecord(t *testing.T) {
 	stores := map[storetypes.StoreKey]int{StoreKeyAuth: 0}
 	storage := NewMultiMemDB(stores)
-	mv := NewMVMemory(16, stores)
 	scheduler := NewScheduler(16)
+	mv := NewMVMemory(16, stores, storage, scheduler)
 
 	var views []*MultiMVMemoryView
 	for i := TxnIndex(0); i < 3; i++ {
 		version := TxnVersion{i, 0}
-		view := mv.View(version.Index, storage, scheduler)
+		view := mv.View(version.Index)
 		store := view.GetKVStore(StoreKeyAuth)
 
 		_ = store.Get([]byte("a"))
@@ -43,7 +43,7 @@ func TestMVMemoryRecord(t *testing.T) {
 
 	resultCh := make(chan struct{}, 1)
 	go func() {
-		view := mv.View(3, storage, scheduler)
+		view := mv.View(3)
 		store := view.GetKVStore(StoreKeyAuth)
 		// will wait for tx 2
 		store.Get([]byte("a"))
@@ -71,7 +71,7 @@ func TestMVMemoryRecord(t *testing.T) {
 
 	// rerun tx 1
 	{
-		view := mv.View(1, storage, scheduler)
+		view := mv.View(1)
 		store := view.GetKVStore(StoreKeyAuth)
 
 		_ = store.Get([]byte("a"))
@@ -89,7 +89,7 @@ func TestMVMemoryRecord(t *testing.T) {
 	// don't write `c` this time
 	{
 		version := TxnVersion{2, 1}
-		view := mv.View(version.Index, storage, scheduler)
+		view := mv.View(version.Index)
 		store := view.GetKVStore(StoreKeyAuth)
 
 		_ = store.Get([]byte("a"))
@@ -109,7 +109,7 @@ func TestMVMemoryRecord(t *testing.T) {
 
 	// run tx 3
 	{
-		view := mv.View(3, storage, scheduler)
+		view := mv.View(3)
 		store := view.GetKVStore(StoreKeyAuth)
 
 		_ = store.Get([]byte("a"))
