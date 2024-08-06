@@ -70,6 +70,18 @@ func (mv *MVMemory) rcuUpdateWrittenLocations(txn TxnIndex, newLocations MultiLo
 			return true
 		})
 	}
+
+	// delete all the keys in un-touched stores
+	for i, prevLoc := range prevLocations {
+		if _, ok := newLocations[i]; ok {
+			continue
+		}
+
+		for _, key := range prevLoc {
+			mv.data[i].Delete(key, txn)
+		}
+	}
+
 	mv.lastWrittenLocations[txn].Store(&newLocations)
 	return wroteNewLocation
 }

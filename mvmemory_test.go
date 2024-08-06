@@ -137,3 +137,82 @@ func TestMVMemoryRecord(t *testing.T) {
 		require.Equal(t, TxnVersion{1, 1}, version)
 	}
 }
+
+func TestMVMemoryDelete(t *testing.T) {
+	nonceKey, balanceKey := []byte("nonce"), []byte("balance")
+
+	stores := map[storetypes.StoreKey]int{StoreKeyAuth: 0, StoreKeyBank: 1}
+	storage := NewMultiMemDB(stores)
+	{
+		// genesis state
+		authStore := storage.GetKVStore(StoreKeyAuth)
+		authStore.Set(nonceKey, []byte{0})
+		bankStore := storage.GetKVStore(StoreKeyBank)
+		bankStore.Set(balanceKey, []byte{100})
+	}
+	scheduler := NewScheduler(16)
+	mv := NewMVMemory(16, stores, storage, scheduler)
+
+	genMockTx := func(txNonce int) func(*MultiMVMemoryView) bool {
+		return func(view *MultiMVMemoryView) bool {
+			bankStore := view.GetKVStore(StoreKeyBank)
+			balance := int(bankStore.Get(balanceKey)[0])
+			if balance < 50 {
+				// insurfficient balance
+				return false
+			}
+
+			authStore := view.GetKVStore(StoreKeyAuth)
+			nonce := int(authStore.Get(nonceKey)[0])
+			// do a set no matter what
+			authStore.Set(nonceKey, []byte{byte(nonce)})
+			if nonce != txNonce {
+				// invalid nonce
+				return false
+			}
+
+			authStore.Set(nonceKey, []byte{byte(nonce + 1)})
+			bankStore.Set(balanceKey, []byte{byte(balance - 50)})
+			return true
+		}
+	}
+
+	tx0, tx1, tx2 := genMockTx(0), genMockTx(1), genMockTx(2)
+
+	view0 := mv.View(0)
+	require.True(t, tx0(view0))
+	view1 := mv.View(1)
+	require.False(t, tx1(view1))
+	view2 := mv.View(2)
+	require.False(t, tx2(view2))
+
+	require.True(t, mv.Record(TxnVersion{1, 0}, view1))
+	require.True(t, mv.Record(TxnVersion{2, 0}, view2))
+	require.True(t, mv.Record(TxnVersion{0, 0}, view0))
+
+	require.True(t, mv.ValidateReadSet(0))
+	require.False(t, mv.ValidateReadSet(1))
+	mv.ConvertWritesToEstimates(1)
+	require.False(t, mv.ValidateReadSet(2))
+	mv.ConvertWritesToEstimates(2)
+
+	// re-execute tx 1 and 2
+	view1 = mv.View(1)
+	require.True(t, tx1(view1))
+	mv.Record(TxnVersion{1, 1}, view1)
+	require.True(t, mv.ValidateReadSet(1))
+
+	view2 = mv.View(2)
+	// tx 2 fail due to insufficient balance, but stm validation is successful.
+	require.False(t, tx2(view2))
+	mv.Record(TxnVersion{2, 1}, view2)
+	require.True(t, mv.ValidateReadSet(2))
+
+	mv.WriteSnapshot(storage)
+	{
+		authStore := storage.GetKVStore(StoreKeyAuth)
+		require.Equal(t, []byte{2}, authStore.Get(nonceKey))
+		bankStore := storage.GetKVStore(StoreKeyBank)
+		require.Equal(t, []byte{0}, bankStore.Get(balanceKey))
+	}
+}
