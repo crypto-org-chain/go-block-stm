@@ -177,7 +177,8 @@ func (d *GMVData[V]) SnapshotTo(cb func(Key, V) bool) {
 		}
 
 		if item.Estimate {
-			return true
+			// ignore ESTIMATE mark
+			return false
 		}
 
 		return cb(outer.Key, item.Value)
