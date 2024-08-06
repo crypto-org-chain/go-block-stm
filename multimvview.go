@@ -6,31 +6,31 @@ const ViewsPreAllocate = 4
 
 // MultiMVMemoryView don't need to be thread-safe, there's a dedicated instance for each tx execution.
 type MultiMVMemoryView struct {
-	stores   map[storetypes.StoreKey]int
-	views    map[storetypes.StoreKey]MVView
-	initView func(storetypes.StoreKey, TxnIndex) MVView
-	txn      TxnIndex
+	stores    map[storetypes.StoreKey]int
+	views     map[storetypes.StoreKey]MVView
+	newMVView func(storetypes.StoreKey, TxnIndex) MVView
+	txn       TxnIndex
 }
 
 var _ MultiStore = (*MultiMVMemoryView)(nil)
 
 func NewMultiMVMemoryView(
 	stores map[storetypes.StoreKey]int,
-	initView func(storetypes.StoreKey, TxnIndex) MVView,
+	newMVView func(storetypes.StoreKey, TxnIndex) MVView,
 	txn TxnIndex,
 ) *MultiMVMemoryView {
 	return &MultiMVMemoryView{
-		stores:   stores,
-		views:    make(map[storetypes.StoreKey]MVView, ViewsPreAllocate),
-		initView: initView,
-		txn:      txn,
+		stores:    stores,
+		views:     make(map[storetypes.StoreKey]MVView, ViewsPreAllocate),
+		newMVView: newMVView,
+		txn:       txn,
 	}
 }
 
 func (mv *MultiMVMemoryView) getViewOrInit(name storetypes.StoreKey) MVView {
 	view, ok := mv.views[name]
 	if !ok {
-		view = mv.initView(name, mv.txn)
+		view = mv.newMVView(name, mv.txn)
 		mv.views[name] = view
 	}
 	return view

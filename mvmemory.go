@@ -109,10 +109,10 @@ func (mv *MVMemory) WriteSnapshot(storage MultiStore) {
 
 // View creates a view for a particular transaction.
 func (mv *MVMemory) View(txn TxnIndex) *MultiMVMemoryView {
-	return NewMultiMVMemoryView(mv.stores, mv.initMVView, txn)
+	return NewMultiMVMemoryView(mv.stores, mv.newMVView, txn)
 }
 
-func (mv *MVMemory) initMVView(name storetypes.StoreKey, txn TxnIndex) MVView {
+func (mv *MVMemory) newMVView(name storetypes.StoreKey, txn TxnIndex) MVView {
 	i := mv.stores[name]
 	return NewMVView(i, mv.storage.GetStore(name), mv.GetMVStore(i), mv.scheduler, txn)
 }
