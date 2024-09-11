@@ -39,7 +39,7 @@ type Scheduler struct {
 	validatedTxns atomic.Int64
 }
 
-func NewScheduler(block_size int, dependencies []TxDependency) *Scheduler {
+func NewScheduler(block_size int) *Scheduler {
 	return &Scheduler{
 		block_size:     block_size,
 		txn_dependency: make([]TxDependency, block_size),
