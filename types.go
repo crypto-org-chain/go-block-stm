@@ -100,3 +100,8 @@ type MVView interface {
 	ApplyWriteSet(TxnVersion) Locations
 	ReadSet() *ReadSet
 }
+
+type PreEstimates struct {
+	Store int // store index
+	Keys  []Key
+}

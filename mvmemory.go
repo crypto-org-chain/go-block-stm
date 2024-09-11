@@ -26,9 +26,23 @@ func NewMVMemory(
 	block_size int, stores map[storetypes.StoreKey]int,
 	storage MultiStore, scheduler *Scheduler,
 ) *MVMemory {
+	return NewMVMemoryWithEstimates(block_size, stores, storage, scheduler, nil)
+}
+
+func NewMVMemoryWithEstimates(
+	block_size int, stores map[storetypes.StoreKey]int,
+	storage MultiStore, scheduler *Scheduler, estimates map[int]map[int][]Key,
+) *MVMemory {
 	data := make([]MVStore, len(stores))
 	for key, i := range stores {
 		data[i] = NewMVStore(key)
+	}
+	for txn, est := range estimates {
+		for store, keys := range est {
+			for _, key := range keys {
+				data[store].WriteEstimate(key, TxnIndex(txn))
+			}
+		}
 	}
 	return &MVMemory{
 		storage:              storage,
