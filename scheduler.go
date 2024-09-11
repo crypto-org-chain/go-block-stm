@@ -3,6 +3,7 @@ package block_stm
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"sync/atomic"
 )
 
@@ -12,6 +13,19 @@ const (
 	TaskKindExecution TaskKind = iota
 	TaskKindValidation
 )
+
+type TxDependency struct {
+	sync.Mutex
+	dependents []TxnIndex
+}
+
+func (t *TxDependency) Swap(new []TxnIndex) []TxnIndex {
+	t.Lock()
+	old := t.dependents
+	t.dependents = new
+	t.Unlock()
+	return old
+}
 
 // Scheduler implements the scheduler for the block-stm
 // ref: `Algorithm 4 The Scheduler module, variables, utility APIs and next task logic`
@@ -150,7 +164,7 @@ func (s *Scheduler) WaitForDependency(txn TxnIndex, blocking_txn TxnIndex) *Cond
 	}
 
 	s.txn_status[txn].Suspend(cond)
-	entry.Dependents = append(entry.Dependents, txn)
+	entry.dependents = append(entry.dependents, txn)
 	entry.Unlock()
 
 	return cond
