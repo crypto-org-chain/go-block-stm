@@ -18,6 +18,21 @@ func ExecuteBlock(
 	executors int,
 	txExecutor TxExecutor,
 ) error {
+	return ExecuteBlockWithEstimates(
+		ctx, blockSize, stores, storage, executors,
+		nil, txExecutor,
+	)
+}
+
+func ExecuteBlockWithEstimates(
+	ctx context.Context,
+	blockSize int,
+	stores map[storetypes.StoreKey]int,
+	storage MultiStore,
+	executors int,
+	estimates map[int]MultiLocations, // txn -> multi-locations
+	txExecutor TxExecutor,
+) error {
 	if executors < 0 {
 		return fmt.Errorf("invalid number of executors: %d", executors)
 	}
@@ -27,7 +42,7 @@ func ExecuteBlock(
 
 	// Create a new scheduler
 	scheduler := NewScheduler(blockSize)
-	mvMemory := NewMVMemory(blockSize, stores, storage, scheduler)
+	mvMemory := NewMVMemoryWithEstimates(blockSize, stores, storage, scheduler, estimates)
 
 	var wg sync.WaitGroup
 	wg.Add(executors)

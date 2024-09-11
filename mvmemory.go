@@ -26,11 +26,19 @@ func NewMVMemory(
 	block_size int, stores map[storetypes.StoreKey]int,
 	storage MultiStore, scheduler *Scheduler,
 ) *MVMemory {
+	return NewMVMemoryWithEstimates(block_size, stores, storage, scheduler, nil)
+}
+
+func NewMVMemoryWithEstimates(
+	block_size int, stores map[storetypes.StoreKey]int,
+	storage MultiStore, scheduler *Scheduler, estimates map[int]MultiLocations,
+) *MVMemory {
 	data := make([]MVStore, len(stores))
 	for key, i := range stores {
 		data[i] = NewMVStore(key)
 	}
-	return &MVMemory{
+
+	mv := &MVMemory{
 		storage:              storage,
 		scheduler:            scheduler,
 		stores:               stores,
@@ -38,6 +46,14 @@ func NewMVMemory(
 		lastWrittenLocations: make([]atomic.Pointer[MultiLocations], block_size),
 		lastReadSet:          make([]atomic.Pointer[MultiReadSet], block_size),
 	}
+
+	// init with pre-estimates
+	for txn, est := range estimates {
+		mv.rcuUpdateWrittenLocations(TxnIndex(txn), est)
+		mv.ConvertWritesToEstimates(TxnIndex(txn))
+	}
+
+	return mv
 }
 
 func (mv *MVMemory) Record(version TxnVersion, view *MultiMVMemoryView) bool {
