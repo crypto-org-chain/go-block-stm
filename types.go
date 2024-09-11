@@ -2,6 +2,7 @@ package block_stm
 
 import (
 	"bytes"
+	"sync"
 
 	storetypes "cosmossdk.io/store/types"
 )
@@ -10,6 +11,19 @@ type (
 	TxnIndex    int
 	Incarnation uint
 )
+
+type TxDependency struct {
+	sync.Mutex
+	Dependents []TxnIndex
+}
+
+func (t *TxDependency) Swap(new []TxnIndex) []TxnIndex {
+	t.Lock()
+	old := t.Dependents
+	t.Dependents = new
+	t.Unlock()
+	return old
+}
 
 type TxnVersion struct {
 	Index       TxnIndex
