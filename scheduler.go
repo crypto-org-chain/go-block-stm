@@ -166,18 +166,8 @@ func (s *Scheduler) WaitForDependency(txn TxnIndex, blocking_txn TxnIndex) *Cond
 }
 
 func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
-	if len(txns) == 0 {
-		return
-	}
-	minDependencyIdx := txns[0]
 	for _, txn := range txns {
 		s.txn_status[txn].Resume()
-		if txn < minDependencyIdx {
-			minDependencyIdx = txn
-		}
-	}
-	if minDependencyIdx != InvalidTxnVersion.Index {
-		s.DecreaseExecutionIdx(minDependencyIdx)
 	}
 }
 
