@@ -31,7 +31,7 @@ func NewMVMemory(
 
 func NewMVMemoryWithEstimates(
 	block_size int, stores map[storetypes.StoreKey]int,
-	storage MultiStore, scheduler *Scheduler, estimates map[int]MultiLocations,
+	storage MultiStore, scheduler *Scheduler, estimates []MultiLocations,
 ) *MVMemory {
 	data := make([]MVStore, len(stores))
 	for key, i := range stores {

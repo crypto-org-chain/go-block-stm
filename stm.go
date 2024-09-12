@@ -30,7 +30,7 @@ func ExecuteBlockWithEstimates(
 	stores map[storetypes.StoreKey]int,
 	storage MultiStore,
 	executors int,
-	estimates map[int]MultiLocations, // txn -> multi-locations
+	estimates []MultiLocations, // txn -> multi-locations
 	txExecutor TxExecutor,
 ) error {
 	if executors < 0 {
