@@ -114,7 +114,7 @@ func (it *MVIterator[V]) resolveValueInner(tree *BTree[secondaryDataItem[V]]) (*
 				it.waitFn(v.Index)
 				continue
 			}
-			// in validation mode, it should fail validation immediatelly
+			// in validation mode, it should fail validation immediately
 			return nil, false
 		}
 
