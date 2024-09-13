@@ -65,11 +65,6 @@ func (s *Scheduler) Done() bool {
 	return s.done_marker.Load()
 }
 
-func (s *Scheduler) DecreaseExecutionIdx(target TxnIndex) {
-	StoreMin(&s.execution_idx, uint64(target))
-	s.decrease_cnt.Add(1)
-}
-
 func (s *Scheduler) DecreaseValidationIdx(target TxnIndex) {
 	StoreMin(&s.validation_idx, uint64(target))
 	s.decrease_cnt.Add(1)
