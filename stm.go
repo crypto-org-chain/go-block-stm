@@ -37,7 +37,7 @@ func ExecuteBlockWithEstimates(
 		return fmt.Errorf("invalid number of executors: %d", executors)
 	}
 	if executors == 0 {
-		executors = runtime.NumCPU()
+		executors = maxParallelism()
 	}
 
 	// Create a new scheduler
@@ -67,4 +67,8 @@ func ExecuteBlockWithEstimates(
 	// Write the snapshot into the storage
 	mvMemory.WriteSnapshot(storage)
 	return nil
+}
+
+func maxParallelism() int {
+	return min(runtime.GOMAXPROCS(0), runtime.NumCPU())
 }
