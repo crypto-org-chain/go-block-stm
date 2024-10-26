@@ -12,7 +12,7 @@ type (
 )
 
 var (
-	_ storetypes.KVStore = (*MemDB)(nil)
+	_ storetypes.KVStore    = (*MemDB)(nil)
 	_ storetypes.ObjKVStore = (*ObjMemDB)(nil)
 )
 
@@ -86,7 +86,7 @@ func (db *GMemDB[V]) Delete(key []byte) {
 }
 
 // When used as an overlay (e.g. WriteSet), it stores the `nil` value to represent deleted keys,
-// so we return seperate bool value for found status.
+// so we return separate bool value for found status.
 func (db *GMemDB[V]) OverlayGet(key Key) (V, bool) {
 	item, ok := db.BTreeG.Get(memdbItem[V]{key: key})
 	if !ok {

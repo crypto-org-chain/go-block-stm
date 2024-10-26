@@ -66,8 +66,10 @@ func (s *Scheduler) Done() bool {
 }
 
 func (s *Scheduler) DecreaseValidationIdx(target TxnIndex) {
-	StoreMin(&s.validation_idx, uint64(target))
-	s.decrease_cnt.Add(1)
+	if target != InvalidTxnVersion.Index {
+		StoreMin(&s.validation_idx, uint64(target))
+		s.decrease_cnt.Add(1)
+	}
 }
 
 func (s *Scheduler) CheckDone() {
