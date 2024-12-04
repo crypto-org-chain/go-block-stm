@@ -105,6 +105,19 @@ func (d *GMVData[V]) Iterator(
 // ValidateReadSet validates the read descriptors,
 // returns true if valid.
 func (d *GMVData[V]) ValidateReadSet(txn TxnIndex, rs *ReadSet) bool {
+	for _, desc := range rs.Hases {
+		value, _, estimate := d.Read(desc.Key, txn)
+		if estimate {
+			// previously read entry from data, now ESTIMATE
+			return false
+		}
+		exists := !d.isZero(value)
+		if exists != desc.Exists {
+			// existance status changed
+			return false
+		}
+	}
+
 	for _, desc := range rs.Reads {
 		_, version, estimate := d.Read(desc.Key, txn)
 		if estimate {

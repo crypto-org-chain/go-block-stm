@@ -98,15 +98,46 @@ func (s *GMVMemoryView[V]) Get(key []byte) V {
 		// record the read version, invalid version is ⊥.
 		// if not found, record version ⊥ when reading from storage.
 		s.readSet.Reads = append(s.readSet.Reads, ReadDescriptor{key, version})
+
 		if !version.Valid() {
 			return s.storage.Get(key)
 		}
+
 		return value
 	}
 }
 
 func (s *GMVMemoryView[V]) Has(key []byte) bool {
-	return !s.mvData.isZero(s.Get(key))
+	if s.writeSet != nil {
+		if value, found := s.writeSet.OverlayGet(key); found {
+			// value written by this txn
+			// nil value means deleted
+			return !s.mvData.isZero(value)
+		}
+	}
+
+	for {
+		value, version, estimate := s.mvData.Read(key, s.txn)
+		if estimate {
+			// read ESTIMATE mark, wait for the blocking txn to finish
+			s.waitFor(version.Index)
+			continue
+		}
+
+		var exists bool
+		if !version.Valid() {
+			exists = s.storage.Has(key)
+		} else {
+			exists = !s.mvData.isZero(value)
+		}
+
+		// record the has descriptor, has operation is validated by value rather than version.
+		s.readSet.Hases = append(s.readSet.Hases, HasDescriptor{
+			Key: key, Exists: exists,
+		})
+
+		return exists
+	}
 }
 
 func (s *GMVMemoryView[V]) Set(key []byte, value V) {
