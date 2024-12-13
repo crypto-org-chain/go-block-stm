@@ -1,7 +1,10 @@
 package block_stm
 
 import (
+	"io"
+
 	"cosmossdk.io/store/cachekv"
+	"cosmossdk.io/store/tracekv"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/tidwall/btree"
 )
@@ -12,7 +15,7 @@ type (
 )
 
 var (
-	_ storetypes.KVStore = (*MemDB)(nil)
+	_ storetypes.KVStore    = (*MemDB)(nil)
 	_ storetypes.ObjKVStore = (*ObjMemDB)(nil)
 )
 
@@ -120,6 +123,14 @@ func (db *GMemDB[V]) GetStoreType() storetypes.StoreType {
 // CacheWrap implements types.KVStore.
 func (db *GMemDB[V]) CacheWrap() storetypes.CacheWrap {
 	return cachekv.NewGStore(db, db.isZero, db.valueLen)
+}
+
+// CacheWrapWithTrace implements types.KVStore.
+func (db *GMemDB[V]) CacheWrapWithTrace(w io.Writer, tc storetypes.TraceContext) storetypes.CacheWrap {
+	if store, ok := any(db).(*GMemDB[[]byte]); ok {
+		return cachekv.NewGStore(tracekv.NewStore(store, w, tc), store.isZero, store.valueLen)
+	}
+	return db.CacheWrap()
 }
 
 type MemDBIterator[V any] struct {
